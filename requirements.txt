@@ -1,0 +1,40 @@
+# --- Backend Django ---
+Django==4.2.7
+djangorestframework==3.14.0
+django-cors-headers==4.3.1
+python-decouple==3.8
+psycopg2-binary==2.9.9
+channels==4.0.0
+channels-redis==4.1.0
+daphne==4.0.0
+django-filter==23.5
+whitenoise==6.6.0
+gunicorn==21.2.0
+
+# --- Utilitários e Sistema ---
+requests==2.31.0
+psutil==5.9.6
+pywin32==306
+pywinauto==0.6.8
+pynput==1.7.6
+screeninfo==0.8.1
+python-dotenv==1.0.1
+
+# --- YOLOv8 e Deep Learning ---
+ultralytics==8.3.5
+torch==2.1.0
+torchvision==0.16.0
+
+# --- Visualização e Análise ---
+matplotlib==3.9.2
+pandas==2.2.2
+seaborn==0.13.2
+
+# --- Processamento de Imagem ---
+opencv-python==4.10.0.84
+Pillow==10.1.0  # unificado (não repita com "pillow")
+
+# --- Utilidades ---
+numpy==1.26.4
+tqdm==4.66.5
+pyyaml==6.0.2

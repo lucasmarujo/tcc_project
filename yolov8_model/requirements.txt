@@ -1,0 +1,18 @@
+# YOLOv8 e dependências principais
+ultralytics>=8.0.0
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Visualização e análise
+matplotlib>=3.9.0
+pandas>=2.2.0
+seaborn>=0.13.0
+
+# Processamento de imagens
+opencv-python>=4.10.0
+Pillow>=10.0.0
+
+# Utilidades
+numpy>=1.26.0
+tqdm>=4.66.0
+pyyaml>=6.0.0

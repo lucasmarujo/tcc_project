@@ -1,0 +1,293 @@
+{% extends 'base.html' %}
+
+{% block title %}Monitoramento Ao Vivo - Monitor de Alunos{% endblock %}
+
+{% block page_title %}Monitoramento Ao Vivo{% endblock %}
+{% block page_subtitle %}Acompanhamento em Tempo Real{% endblock %}
+
+{% block content %}
+<!-- Estatísticas de Status -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="stat-card success">
+            <div class="stat-icon">
+                <i class="bi bi-check-circle"></i>
+            </div>
+            <div class="stat-value" id="stat-online">{{ online_count }}</div>
+            <div class="stat-label">Alunos Online</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card warning">
+            <div class="stat-icon">
+                <i class="bi bi-dash-circle"></i>
+            </div>
+            <div class="stat-value" id="stat-offline">{{ offline_count }}</div>
+            <div class="stat-label">Alunos Offline</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card primary">
+            <div class="stat-icon">
+                <i class="bi bi-people"></i>
+            </div>
+            <div class="stat-value" id="stat-total">{{ total_students }}</div>
+            <div class="stat-label">Total de Alunos</div>
+        </div>
+    </div>
+</div>
+
+<!-- Lista de Alunos e Status -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="table-card">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5><i class="bi bi-people"></i> Status dos Alunos</h5>
+                <span class="badge bg-success" id="status-refresh">
+                    <i class="bi bi-arrow-clockwise"></i> Atualização automática
+                </span>
+            </div>
+            
+            <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                <table class="table table-hover table-sm">
+                    <thead class="table-light sticky-top">
+                        <tr>
+                            <th>Status</th>
+                            <th>RA</th>
+                            <th>Nome</th>
+                            <th>Última Atividade</th>
+                        </tr>
+                    </thead>
+                    <tbody id="students-status-tbody">
+                        {% for item in students_status %}
+                        <tr class="{% if item.is_online %}table-success{% endif %}">
+                            <td>
+                                {% if item.is_online %}
+                                    <span class="badge bg-success">
+                                        <i class="bi bi-circle-fill blink"></i> Online
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-secondary">
+                                        <i class="bi bi-circle"></i> Offline
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td><strong>{{ item.registration_number }}</strong></td>
+                            <td>
+                                <a href="{% url 'dashboard:student_detail' item.student.id %}">
+                                    {{ item.name }}
+                                </a>
+                            </td>
+                            <td>
+                                {% if item.last_activity %}
+                                    <small class="text-muted">{{ item.last_activity|date:"d/m/Y H:i:s" }}</small>
+                                {% else %}
+                                    <small class="text-muted">Nunca</small>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted">Nenhum aluno cadastrado</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="table-card">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5><i class="bi bi-broadcast"></i> Eventos em Tempo Real</h5>
+                    <span class="badge bg-success" id="connection-status">
+                    <i class="bi bi-circle-fill"></i> Atualização ativa
+                    </span>
+            </div>
+            
+            <div id="live-events" style="max-height: 500px; overflow-y: auto;">
+                {% if recent_events %}
+                    {% for event in recent_events %}
+                    <div class="alert alert-info alert-dismissible fade show" role="alert">
+                        <strong><i class="bi bi-activity"></i> {{ event.get_event_type_display }}</strong>
+                        <br>
+                        <small>
+                            <strong>Aluno:</strong> {{ event.student.name }} ({{ event.student.registration_number }})
+                            <br>
+                            {% if event.url %}
+                                <strong>URL:</strong> {{ event.url|truncatechars:50 }}
+                            {% elif event.app_name %}
+                                <strong>App:</strong> {{ event.app_name }}
+                            {% elif event.key_event %}
+                                <strong>Tecla:</strong> {{ event.key_event }}
+                            {% elif event.window_title %}
+                                <strong>Janela:</strong> {{ event.window_title|truncatechars:40 }}
+                            {% endif %}
+                            <br>
+                            {{ event.timestamp|date:"d/m/Y H:i:s" }}
+                        </small>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                <div class="text-center text-muted p-5">
+                    <i class="bi bi-hourglass-split" style="font-size: 48px;"></i>
+                    <p class="mt-3">Aguardando eventos...</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Função para atualizar status dos alunos
+    function atualizarStatusAlunos() {
+        const statusElement = document.querySelector('#status-refresh');
+        
+        // Mostrar indicador de atualização
+        statusElement.innerHTML = '<i class="bi bi-arrow-clockwise spin"></i> Atualizando...';
+        statusElement.classList.remove('bg-success');
+        statusElement.classList.add('bg-info');
+        
+        // Buscar nova página
+        fetch(window.location.href)
+            .then(response => response.text())
+            .then(html => {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                
+                // Atualizar tabela de status
+                const novosTbody = doc.querySelector('#students-status-tbody');
+                if (novosTbody) {
+                    const tbody = document.querySelector('#students-status-tbody');
+                    tbody.innerHTML = novosTbody.innerHTML;
+                }
+                
+                // Atualizar estatísticas
+                const statOnline = doc.querySelector('#stat-online');
+                const statOffline = doc.querySelector('#stat-offline');
+                const statTotal = doc.querySelector('#stat-total');
+                
+                if (statOnline) document.querySelector('#stat-online').textContent = statOnline.textContent;
+                if (statOffline) document.querySelector('#stat-offline').textContent = statOffline.textContent;
+                if (statTotal) document.querySelector('#stat-total').textContent = statTotal.textContent;
+                
+                // Atualizar eventos recentes
+                const novosEventos = doc.querySelector('#live-events');
+                if (novosEventos) {
+                    document.querySelector('#live-events').innerHTML = novosEventos.innerHTML;
+                }
+                
+                // Mostrar sucesso
+                statusElement.innerHTML = '<i class="bi bi-check-circle"></i> Atualizado';
+                statusElement.classList.remove('bg-info');
+                statusElement.classList.add('bg-success');
+                
+                setTimeout(() => {
+                    statusElement.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Atualização automática';
+                }, 2000);
+            })
+            .catch(error => {
+                console.error('Erro ao atualizar:', error);
+                statusElement.innerHTML = '<i class="bi bi-x-circle"></i> Erro';
+                statusElement.classList.remove('bg-info');
+                statusElement.classList.add('bg-danger');
+                
+                setTimeout(() => {
+                    statusElement.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Atualização automática';
+                    statusElement.classList.remove('bg-danger');
+                    statusElement.classList.add('bg-success');
+                }, 3000);
+            });
+    }
+    
+    // Atualizar a cada 5 segundos
+    setInterval(atualizarStatusAlunos, 5000);
+    
+    // Primeira atualização após 3 segundos
+    setTimeout(atualizarStatusAlunos, 3000);
+</script>
+
+<style>
+    /* Animação para o indicador "online" */
+    @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.3; }
+    }
+    
+    .blink {
+        animation: blink 2s ease-in-out infinite;
+    }
+    
+    /* Animação de rotação */
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+    
+    .spin {
+        animation: spin 1s linear infinite;
+        display: inline-block;
+    }
+    
+    /* Destaque para linhas online */
+    .table-success {
+        background-color: rgba(25, 135, 84, 0.1) !important;
+    }
+    
+    /* Sticky header */
+    .sticky-top {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background-color: white;
+    }
+    
+    /* Transição suave */
+    #students-status-tbody, #live-events {
+        transition: opacity 0.3s ease;
+    }
+    
+    /* Scroll customizado */
+    .table-responsive::-webkit-scrollbar {
+        width: 8px;
+    }
+    
+    .table-responsive::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+    
+    .table-responsive::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 4px;
+    }
+    
+    .table-responsive::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+    
+    #live-events::-webkit-scrollbar {
+        width: 8px;
+    }
+    
+    #live-events::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+    
+    #live-events::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 4px;
+    }
+    
+    #live-events::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+</style>
+{% endblock %}
+

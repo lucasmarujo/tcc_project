@@ -1,0 +1,24 @@
+# YOLOv8 Classification Dataset Configuration
+# Este arquivo será gerado automaticamente pelo train.py
+# Você pode editá-lo manualmente se necessário
+
+# Caminho raiz do dataset
+path: data
+
+# Caminho para treino (relativo ao path ou absoluto)
+train: data
+
+# Caminho para validação (YOLOv8 faz split automático se for o mesmo que train)
+val: data
+
+# Caminho para teste (opcional)
+test: data
+
+# Mapeamento de classes (ID -> Nome)
+names:
+  0: nao_permitido
+  1: permitido
+
+# Número de classes
+nc: 2
+

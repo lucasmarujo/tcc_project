@@ -1,0 +1,181 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ student.name }} - Monitor de Alunos{% endblock %}
+
+{% block page_title %}{{ student.name }}{% endblock %}
+{% block page_subtitle %}{{ student.registration_number }}{% endblock %}
+
+{% block content %}
+<!-- Estatísticas do Aluno -->
+<div class="row">
+    <div class="col-md-4">
+        <div class="stat-card primary">
+            <div class="stat-icon">
+                <i class="bi bi-activity"></i>
+            </div>
+            <div class="stat-value">{{ events_last_24h }}</div>
+            <div class="stat-label">Eventos (24h)</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card warning">
+            <div class="stat-icon">
+                <i class="bi bi-exclamation-triangle"></i>
+            </div>
+            <div class="stat-value">{{ active_alerts_count }}</div>
+            <div class="stat-label">Alertas Ativos</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="stat-card success">
+            <div class="stat-icon">
+                <i class="bi bi-check-circle"></i>
+            </div>
+            <div class="stat-value">{{ total_alerts }}</div>
+            <div class="stat-label">Total de Alertas</div>
+        </div>
+    </div>
+</div>
+
+<!-- Informações do Aluno -->
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="table-card">
+            <h5><i class="bi bi-person-badge"></i> Informações do Aluno</h5>
+            <table class="table">
+                <tr>
+                    <th style="width: 200px;">Matrícula:</th>
+                    <td>{{ student.registration_number }}</td>
+                </tr>
+                <tr>
+                    <th>Nome:</th>
+                    <td>{{ student.name }}</td>
+                </tr>
+                <tr>
+                    <th>Email:</th>
+                    <td>{{ student.email }}</td>
+                </tr>
+                <tr>
+                    <th>Status:</th>
+                    <td>
+                        {% if student.is_active %}
+                            <span class="badge bg-success">Ativo</span>
+                        {% else %}
+                            <span class="badge bg-danger">Inativo</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <th>Cadastrado em:</th>
+                    <td>{{ student.created_at|date:"d/m/Y H:i" }}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Alertas do Aluno -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="table-card">
+            <h5><i class="bi bi-bell"></i> Alertas</h5>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Título</th>
+                            <th>Severidade</th>
+                            <th>Status</th>
+                            <th>Data</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for alert in alerts %}
+                        <tr>
+                            <td>{{ alert.title }}</td>
+                            <td>
+                                <span class="alert-badge severity-{{ alert.severity }}">
+                                    {{ alert.get_severity_display }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge-status bg-{{ alert.status }}">
+                                    {{ alert.get_status_display }}
+                                </span>
+                            </td>
+                            <td>{{ alert.created_at|date:"d/m/Y H:i:s" }}</td>
+                            <td>
+                                <a href="/admin/monitoring/alert/{{ alert.id }}/change/" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye"></i> Ver
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted">Nenhum alerta para este aluno</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Eventos do Aluno -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="table-card">
+            <h5><i class="bi bi-list-ul"></i> Eventos Recentes</h5>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Tipo</th>
+                            <th>Detalhes</th>
+                            <th>Navegador/App</th>
+                            <th>Data/Hora</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for event in events %}
+                        <tr>
+                            <td>
+                                <span class="badge bg-info">{{ event.get_event_type_display }}</span>
+                            </td>
+                            <td>
+                                {% if event.url %}
+                                    <a href="{{ event.url }}" target="_blank" class="text-truncate d-inline-block" style="max-width: 400px;">
+                                        {{ event.url }}
+                                    </a>
+                                {% elif event.app_name %}
+                                    <i class="bi bi-app"></i> {{ event.app_name }}
+                                {% else %}
+                                    {{ event.window_title|default:"-" }}
+                                {% endif %}
+                            </td>
+                            <td>{{ event.browser|default:event.app_name|default:"-" }}</td>
+                            <td>{{ event.timestamp|date:"d/m/Y H:i:s" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted">Nenhum evento para este aluno</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col-12">
+        <a href="{% url 'dashboard:home' %}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Voltar ao Dashboard
+        </a>
+    </div>
+</div>
+{% endblock %}
+

@@ -1,0 +1,373 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - Monitor de Alunos{% endblock %}
+
+{% block content %}
+<!-- Estatísticas Cards -->
+<div class="row">
+    <div class="col-md-3">
+        <div class="stat-card primary">
+            <div class="stat-icon">
+                <i class="bi bi-people"></i>
+            </div>
+            <div class="stat-value" id="stat-students">{{ total_students }}</div>
+            <div class="stat-label">Alunos Ativos</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card success">
+            <div class="stat-icon">
+                <i class="bi bi-activity"></i>
+            </div>
+            <div class="stat-value" id="stat-events">{{ total_events_today }}</div>
+            <div class="stat-label">Eventos Hoje</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card warning">
+            <div class="stat-icon">
+                <i class="bi bi-exclamation-triangle"></i>
+            </div>
+            <div class="stat-value" id="stat-alerts">{{ active_alerts }}</div>
+            <div class="stat-label">Alertas Ativos</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card danger">
+            <div class="stat-icon">
+                <i class="bi bi-shield-exclamation"></i>
+            </div>
+            <div class="stat-value" id="stat-critical">{{ critical_alerts }}</div>
+            <div class="stat-label">Alertas Críticos</div>
+        </div>
+    </div>
+</div>
+
+<!-- Sessões de Exame Ativas -->
+{% if active_exams %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="table-card">
+            <h5><i class="bi bi-calendar-check"></i> Sessões de Exame Ativas</h5>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Exame</th>
+                            <th>Início</th>
+                            <th>Término</th>
+                            <th>Alunos</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for exam in active_exams %}
+                        <tr>
+                            <td><strong>{{ exam.title }}</strong></td>
+                            <td>{{ exam.start_time|date:"d/m/Y H:i" }}</td>
+                            <td>{{ exam.end_time|date:"d/m/Y H:i" }}</td>
+                            <td>{{ exam.students.count }}</td>
+                            <td><span class="badge bg-success">Em Andamento</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Alertas Recentes e Alunos com Alertas -->
+<div class="row mt-4">
+    <div class="col-md-8">
+        <div class="table-card">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0"><i class="bi bi-bell"></i> Alertas Recentes</h5>
+                <span class="badge bg-success" id="alertas-status">
+                    <i class="bi bi-arrow-clockwise"></i> Atualização automática
+                </span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Aluno</th>
+                            <th>Alerta</th>
+                            <th>Severidade</th>
+                            <th>Data</th>
+                            <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="alertas-tbody">
+                    {% for alert in recent_alerts %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'dashboard:student_detail' alert.student.id %}">
+                                    {{ alert.student.name }}
+                                </a>
+                            </td>
+                            <td>{{ alert.title }}</td>
+                            <td>
+                                <span class="alert-badge severity-{{ alert.severity }}">
+                                    {{ alert.get_severity_display }}
+                                </span>
+                            </td>
+                            <td>{{ alert.created_at|date:"d/m/Y H:i" }}</td>
+                            <td>
+                                <a href="/admin/monitoring/alert/{{ alert.id }}/change/" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted">Nenhum alerta recente</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="text-end mt-3">
+                <a href="{% url 'dashboard:alerts_list' %}" class="btn btn-primary">Ver Todos os Alertas</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="table-card">
+            <h5><i class="bi bi-person-exclamation"></i> Alunos com Alertas</h5>
+            <div class="list-group list-group-flush">
+                {% for student in students_with_alerts %}
+                <a href="{% url 'dashboard:student_detail' student.id %}" class="list-group-item list-group-item-action">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ student.name }}</strong>
+                            <br>
+                            <small class="text-muted">{{ student.registration_number }}</small>
+                        </div>
+                        <span class="badge bg-danger rounded-pill">{{ student.alert_count }}</span>
+                    </div>
+                </a>
+                {% empty %}
+                <div class="list-group-item text-center text-muted">
+                    Nenhum aluno com alertas
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Eventos Recentes -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="table-card">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0"><i class="bi bi-list-ul"></i> Eventos Recentes</h5>
+                <span class="badge bg-success" id="eventos-status">
+                    <i class="bi bi-arrow-clockwise"></i> Atualização automática
+                </span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Aluno</th>
+                            <th>Tipo</th>
+                            <th>Detalhes</th>
+                            <th>Data/Hora</th>
+                        </tr>
+                    </thead>
+                    <tbody id="eventos-tbody">
+                        {% for event in recent_events %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'dashboard:student_detail' event.student.id %}">
+                                    {{ event.student.name }}
+                                </a>
+                            </td>
+                            <td>
+                                <span class="badge bg-info">{{ event.get_event_type_display }}</span>
+                            </td>
+                            <td>
+                                {% if event.url %}
+                                    <a href="{{ event.url }}" target="_blank" class="text-truncate d-inline-block" style="max-width: 300px;">
+                                        {{ event.url }}
+                                    </a>
+                                {% elif event.app_name %}
+                                    <i class="bi bi-app"></i> {{ event.app_name }}
+                                {% elif event.key_event %}
+                                    <i class="bi bi-keyboard"></i> <strong>{{ event.key_event }}</strong>
+                                    {% if event.additional_data.description %}
+                                        <br><small class="text-muted">{{ event.additional_data.description }}</small>
+                                    {% endif %}
+                                {% else %}
+                                    {{ event.window_title|default:"-" }}
+                                {% endif %}
+                            </td>
+                            <td>{{ event.timestamp|date:"d/m/Y H:i:s" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted">Nenhum evento recente</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="text-end mt-3">
+                <a href="{% url 'dashboard:events_list' %}" class="btn btn-primary">Ver Todos os Eventos</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Função para mostrar indicador de atualização
+    function mostrarAtualizando(elemento) {
+        elemento.innerHTML = '<i class="bi bi-arrow-clockwise spin"></i> Atualizando...';
+        elemento.classList.remove('bg-success');
+        elemento.classList.add('bg-info');
+    }
+    
+    // Função para mostrar sucesso na atualização
+    function mostrarAtualizado(elemento) {
+        elemento.innerHTML = '<i class="bi bi-check-circle"></i> Atualizado';
+        elemento.classList.remove('bg-info');
+        elemento.classList.add('bg-success');
+        
+        setTimeout(function() {
+            elemento.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Atualização automática';
+        }, 2000);
+    }
+    
+    // Função para atualizar alertas recentes
+    function atualizarAlertas() {
+        const statusElement = document.querySelector('#alertas-status');
+        mostrarAtualizando(statusElement);
+        
+        fetch('{% url "dashboard:home" %}?ajax=alertas')
+            .then(response => response.text())
+            .then(html => {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const novosAlertas = doc.querySelector('#alertas-tbody');
+                
+                if (novosAlertas) {
+                    const tbody = document.querySelector('#alertas-tbody');
+                    tbody.style.opacity = '0.5';
+                    setTimeout(() => {
+                        tbody.innerHTML = novosAlertas.innerHTML;
+                        tbody.style.opacity = '1';
+                        mostrarAtualizado(statusElement);
+                    }, 300);
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao atualizar alertas:', error);
+                statusElement.innerHTML = '<i class="bi bi-x-circle"></i> Erro';
+                statusElement.classList.remove('bg-info');
+                statusElement.classList.add('bg-danger');
+            });
+    }
+    
+    // Função para atualizar eventos recentes
+    function atualizarEventos() {
+        const statusElement = document.querySelector('#eventos-status');
+        mostrarAtualizando(statusElement);
+        
+        fetch('{% url "dashboard:home" %}?ajax=eventos')
+            .then(response => response.text())
+            .then(html => {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const novosEventos = doc.querySelector('#eventos-tbody');
+                
+                if (novosEventos) {
+                    const tbody = document.querySelector('#eventos-tbody');
+                    tbody.style.opacity = '0.5';
+                    setTimeout(() => {
+                        tbody.innerHTML = novosEventos.innerHTML;
+                        tbody.style.opacity = '1';
+                        mostrarAtualizado(statusElement);
+                    }, 300);
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao atualizar eventos:', error);
+                statusElement.innerHTML = '<i class="bi bi-x-circle"></i> Erro';
+                statusElement.classList.remove('bg-info');
+                statusElement.classList.add('bg-danger');
+            });
+    }
+    
+    // Função para atualizar estatísticas
+    function atualizarEstatisticas() {
+        fetch('{% url "dashboard:home" %}?ajax=stats')
+            .then(response => response.json())
+            .then(data => {
+                // Animar mudança de números
+                animarNumero('#stat-students', data.total_students);
+                animarNumero('#stat-events', data.total_events_today);
+                animarNumero('#stat-alerts', data.active_alerts);
+                animarNumero('#stat-critical', data.critical_alerts);
+            })
+            .catch(error => console.error('Erro ao atualizar estatísticas:', error));
+    }
+    
+    // Função para animar mudança de número
+    function animarNumero(seletor, novoValor) {
+        const elemento = document.querySelector(seletor);
+        const valorAtual = parseInt(elemento.textContent);
+        
+        if (valorAtual !== novoValor) {
+            elemento.style.transform = 'scale(1.2)';
+            elemento.style.color = '#667eea';
+            
+            setTimeout(() => {
+                elemento.textContent = novoValor;
+                elemento.style.transform = 'scale(1)';
+                elemento.style.color = '';
+            }, 200);
+        }
+    }
+    
+    // Atualizar tudo a cada 5 segundos
+    setInterval(function() {
+        atualizarAlertas();
+        atualizarEventos();
+        atualizarEstatisticas();
+    }, 5000);
+    
+    // Primeira atualização após 3 segundos
+    setTimeout(function() {
+        atualizarAlertas();
+        atualizarEventos();
+        atualizarEstatisticas();
+    }, 3000);
+    
+    // CSS para animação de rotação
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .spin {
+            animation: spin 1s linear infinite;
+            display: inline-block;
+        }
+        #alertas-tbody, #eventos-tbody {
+            transition: opacity 0.3s ease;
+        }
+        .stat-value {
+            transition: transform 0.2s ease, color 0.2s ease;
+        }
+    `;
+    document.head.appendChild(style);
+</script>
+{% endblock %}
+

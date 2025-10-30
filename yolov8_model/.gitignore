@@ -1,0 +1,72 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# YOLOv8 Training Artifacts
+scripts/models/training_run/
+scripts/models/checkpoints/
+runs/
+*.pt
+!scripts/models/final_model/best.pt  # Manter apenas o modelo final
+
+# YOLOv8 Cache
+*.cache
+
+# Dataset (opcional - descomente se não quiser commitar imagens)
+# data/permitido/*.jpg
+# data/permitido/*.png
+# data/nao_permitido/*.jpg
+# data/nao_permitido/*.png
+
+# Reports e Logs (opcional - mantenha se quiser versionar)
+# *.txt
+# *.log
+# *.csv
+
+# Plots e Visualizações (opcional)
+# *.png
+# *.jpg
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.bak
+*.backup
+temp/
+tmp/
+
+# ONNX e outros formatos exportados
+*.onnx
+*.tflite
+*.pb
+*.mlmodel
+*.engine
+*.torchscript
+

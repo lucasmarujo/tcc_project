@@ -1,0 +1,296 @@
+═══════════════════════════════════════════════════════════════════════════
+    GUIA DE USO - YOLOv8 CLASSIFICATION PARA MONITORAMENTO DE SISTEMA
+═══════════════════════════════════════════════════════════════════════════
+
+📋 SUMÁRIO
+  1. Visão Geral
+  2. Estrutura do Projeto
+  3. Instalação
+  4. Preparação dos Dados
+  5. Treinamento
+  6. Avaliação
+  7. Predição
+  8. FAQ
+
+═══════════════════════════════════════════════════════════════════════════
+1. VISÃO GERAL
+═══════════════════════════════════════════════════════════════════════════
+
+Este projeto utiliza YOLOv8 Classification para classificar capturas de tela
+em duas categorias:
+  - PERMITIDO: Sistema autorizado para uso
+  - NÃO PERMITIDO: Outros sistemas/aplicativos
+
+YOLOv8 é um modelo de visão computacional de última geração desenvolvido
+pela Ultralytics, oferecendo:
+  ✓ Alta precisão
+  ✓ Velocidade de inferência rápida
+  ✓ Fácil implementação
+  ✓ Transfer learning de modelos pré-treinados
+
+═══════════════════════════════════════════════════════════════════════════
+2. ESTRUTURA DO PROJETO
+═══════════════════════════════════════════════════════════════════════════
+
+tensorflow_model/                    # Nome mantido por compatibilidade
+│
+├── data/                            # Dados de treinamento
+│   ├── permitido/                   # Imagens do sistema permitido
+│   └── nao_permitido/               # Imagens de outros sistemas
+│
+├── scripts/                         # Scripts principais
+│   ├── train.py                     # Treinamento do modelo
+│   ├── evaluate.py                  # Avaliação e métricas
+│   ├── predict.py                   # Predições em novas imagens
+│   └── models/                      # Modelos treinados
+│       ├── training_run/            # Artefatos do último treinamento
+│       │   ├── weights/             # Pesos do modelo (best.pt, last.pt)
+│       │   ├── results.csv          # Métricas por época
+│       │   └── results.png          # Gráficos de treinamento
+│       └── final_model/             # Modelo final para produção
+│           ├── best.pt              # Melhor modelo
+│           ├── training_report.txt  # Relatório de treinamento
+│           └── evaluation_report.txt # Relatório de avaliação
+│
+├── utils/                           # Utilitários (deprecated - YOLOv8 built-in)
+├── config.yaml                      # Configuração do dataset
+└── requirements.txt                 # Dependências do projeto
+
+═══════════════════════════════════════════════════════════════════════════
+3. INSTALAÇÃO
+═══════════════════════════════════════════════════════════════════════════
+
+3.1 Criar Ambiente Virtual (recomendado)
+   
+   Windows:
+     python -m venv .venv
+     .venv\Scripts\activate
+   
+   Linux/Mac:
+     python3 -m venv .venv
+     source .venv/bin/activate
+
+3.2 Instalar Dependências
+
+   pip install -r requirements.txt
+
+   Principais pacotes:
+     - ultralytics: Framework YOLOv8
+     - torch: PyTorch para deep learning
+     - opencv-python: Processamento de imagens
+     - matplotlib/seaborn: Visualizações
+
+3.3 Verificar Instalação
+
+   python -c "from ultralytics import YOLO; print('YOLOv8 OK!')"
+
+═══════════════════════════════════════════════════════════════════════════
+4. PREPARAÇÃO DOS DADOS
+═══════════════════════════════════════════════════════════════════════════
+
+4.1 Organizar Imagens
+
+   Estrutura obrigatória:
+   
+   data/
+   ├── permitido/
+   │   ├── imagem1.jpg
+   │   ├── imagem2.png
+   │   └── ...
+   └── nao_permitido/
+       ├── imagem1.jpg
+       ├── imagem2.png
+       └── ...
+
+4.2 Formatos Suportados
+
+   - JPG/JPEG
+   - PNG
+   - BMP
+   - GIF
+   - WEBP
+
+4.3 Recomendações
+
+   ✓ Mínimo 20-30 imagens por classe (ideal: 100+)
+   ✓ Imagens variadas (diferentes contextos, iluminação)
+   ✓ Resolução mínima: 640x640 pixels
+   ✓ Dataset balanceado (número similar de imagens por classe)
+   ✓ Imagens de qualidade (sem blur excessivo)
+
+═══════════════════════════════════════════════════════════════════════════
+5. TREINAMENTO
+═══════════════════════════════════════════════════════════════════════════
+
+5.1 Executar Treinamento
+
+   cd scripts
+   python train.py
+
+5.2 Configurações (editar train.py)
+
+   EPOCHS = 100              # Número de épocas
+   IMG_SIZE = 640           # Tamanho da imagem
+   BATCH_SIZE = 16          # Tamanho do batch
+   MODEL_SIZE = 'n'         # Tamanho do modelo (n/s/m/l/x)
+   PATIENCE = 20            # Early stopping
+
+   Tamanhos de modelo:
+     n (nano):    Mais rápido, menor precisão
+     s (small):   Bom equilíbrio
+     m (medium):  Maior precisão, mais lento
+     l (large):   Alta precisão, requer mais GPU
+     x (xlarge):  Máxima precisão, muito lento
+
+5.3 O que Esperar
+
+   - Download automático do modelo pré-treinado
+   - Data augmentation automático
+   - Early stopping se não houver melhora
+   - Checkpoint do melhor modelo
+   - Relatório detalhado ao final
+
+5.4 Arquivos Gerados
+
+   scripts/models/training_run/
+     - weights/best.pt        → Melhor modelo
+     - weights/last.pt        → Último checkpoint
+     - results.csv            → Métricas por época
+     - results.png            → Gráficos
+     - confusion_matrix.png   → Matriz de confusão
+
+   scripts/models/final_model/
+     - best.pt                → Cópia do melhor modelo
+     - training_report.txt    → Relatório completo
+
+═══════════════════════════════════════════════════════════════════════════
+6. AVALIAÇÃO
+═══════════════════════════════════════════════════════════════════════════
+
+6.1 Executar Avaliação
+
+   cd scripts
+   python evaluate.py
+
+6.2 Métricas Geradas
+
+   - Acurácia geral
+   - Precision, Recall, F1-Score por classe
+   - Matriz de confusão
+   - Distribuição de confiança
+   - Análise de erros
+
+6.3 Arquivos Gerados
+
+   scripts/models/final_model/
+     - evaluation_report.txt      → Relatório textual
+     - evaluation_plots.png       → Visualizações
+     - evaluation_metrics.json    → Métricas em JSON
+
+═══════════════════════════════════════════════════════════════════════════
+7. PREDIÇÃO
+═══════════════════════════════════════════════════════════════════════════
+
+7.1 Executar Predição Interativa
+
+   cd scripts
+   python predict.py
+
+7.2 Opções Disponíveis
+
+   1. Predizer imagem única (com visualização)
+      → Mostra imagem com resultado sobreposto
+   
+   2. Predizer imagem única (texto)
+      → Apenas resultado textual
+   
+   3. Predizer batch (diretório)
+      → Processa todas imagens de uma pasta
+      → Gera resumo estatístico
+
+7.3 Uso Programático
+
+   from ultralytics import YOLO
+   
+   model = YOLO('scripts/models/final_model/best.pt')
+   results = model.predict('imagem.jpg')
+   
+   # Obter classe predita
+   pred_class = results[0].probs.top1
+   confidence = results[0].probs.top1conf
+
+═══════════════════════════════════════════════════════════════════════════
+8. FAQ
+═══════════════════════════════════════════════════════════════════════════
+
+Q: Qual GPU é necessária?
+A: YOLOv8 funciona em CPU e GPU. GPU NVIDIA com CUDA acelera muito.
+   Modelo 'n' funciona bem em CPU. Modelos maiores (m/l/x) precisam GPU.
+
+Q: Como melhorar a precisão?
+A: - Adicionar mais imagens variadas
+   - Balancear dataset
+   - Treinar por mais épocas
+   - Usar modelo maior (s/m/l)
+   - Ajustar data augmentation
+
+Q: Quanto tempo leva o treinamento?
+A: - CPU: 10-30 min (n), 30-60 min (s)
+   - GPU: 2-5 min (n), 5-15 min (s)
+   - Depende do número de imagens e épocas
+
+Q: Posso usar para outras classificações?
+A: Sim! Apenas organize as imagens em pastas por classe.
+   YOLOv8 suporta classificação multi-classe.
+
+Q: Como integrar no sistema de monitoramento?
+A: Importe o modelo no script do aluno:
+   
+   model = YOLO('path/to/best.pt')
+   
+   def check_screen(screenshot_path):
+       result = model.predict(screenshot_path)
+       return result[0].probs.top1  # 0 ou 1
+
+Q: O que fazer se accuracy < 70%?
+A: - Verificar qualidade das imagens
+   - Aumentar dataset
+   - Verificar se imagens estão na pasta correta
+   - Tentar modelo maior
+   - Revisar se classes são distinguíveis
+
+Q: Como exportar para outros formatos?
+A: YOLOv8 suporta vários formatos:
+   
+   model = YOLO('best.pt')
+   model.export(format='onnx')      # ONNX
+   model.export(format='torchscript') # TorchScript
+   model.export(format='coreml')    # iOS
+   model.export(format='tflite')    # Mobile
+
+═══════════════════════════════════════════════════════════════════════════
+📚 RECURSOS ADICIONAIS
+═══════════════════════════════════════════════════════════════════════════
+
+Documentação Oficial YOLOv8:
+  https://docs.ultralytics.com/
+
+Tutoriais:
+  https://docs.ultralytics.com/tasks/classify/
+
+GitHub:
+  https://github.com/ultralytics/ultralytics
+
+═══════════════════════════════════════════════════════════════════════════
+💡 DICAS FINAIS
+═══════════════════════════════════════════════════════════════════════════
+
+1. Sempre ative o ambiente virtual antes de rodar scripts
+2. Mantenha backup do modelo treinado (best.pt)
+3. Use GPU se disponível para treinos mais rápidos
+4. Comece com modelo 'n' para testes, depois escale se necessário
+5. Monitore as métricas durante treinamento
+6. Faça validação em imagens reais antes de deploy
+7. YOLOv8 é muito mais simples que TensorFlow manual!
+
+═══════════════════════════════════════════════════════════════════════════

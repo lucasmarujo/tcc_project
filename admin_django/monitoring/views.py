@@ -1,0 +1,197 @@
+"""
+Views for Monitoring API.
+"""
+from rest_framework import viewsets, status
+from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from django_filters.rest_framework import DjangoFilterBackend
+from django.utils import timezone
+from datetime import timedelta
+
+from .models import MonitoringEvent, Alert
+from .serializers import (
+    MonitoringEventSerializer, 
+    MonitoringEventCreateSerializer,
+    AlertSerializer
+)
+from students.models import Student
+
+
+class MonitoringEventViewSet(viewsets.ModelViewSet):
+    """ViewSet para eventos de monitoramento."""
+    
+    queryset = MonitoringEvent.objects.all().select_related('student', 'exam_session')
+    serializer_class = MonitoringEventSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['student', 'event_type', 'exam_session']
+    
+    @action(detail=False, methods=['get'])
+    def recent(self, request):
+        """Retorna eventos recentes (últimas 24 horas)."""
+        time_threshold = timezone.now() - timedelta(hours=24)
+        recent_events = self.queryset.filter(timestamp__gte=time_threshold)
+        
+        serializer = self.get_serializer(recent_events, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def by_student(self, request):
+        """Retorna eventos agrupados por aluno."""
+        student_id = request.query_params.get('student_id')
+        if not student_id:
+            return Response(
+                {'error': 'student_id parameter is required'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        events = self.queryset.filter(student_id=student_id)
+        serializer = self.get_serializer(events, many=True)
+        return Response(serializer.data)
+
+
+class AlertViewSet(viewsets.ModelViewSet):
+    """ViewSet para alertas."""
+    
+    queryset = Alert.objects.all().select_related('student', 'event')
+    serializer_class = AlertSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['student', 'severity', 'status']
+    
+    @action(detail=False, methods=['get'])
+    def active(self, request):
+        """Retorna alertas ativos (novos ou em revisão)."""
+        active_alerts = self.queryset.filter(status__in=['new', 'reviewing'])
+        serializer = self.get_serializer(active_alerts, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def resolve(self, request, pk=None):
+        """Marca um alerta como resolvido."""
+        alert = self.get_object()
+        alert.status = 'resolved'
+        alert.resolved_at = timezone.now()
+        
+        if 'admin_notes' in request.data:
+            alert.admin_notes = request.data['admin_notes']
+        
+        alert.save()
+        serializer = self.get_serializer(alert)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """Retorna estatísticas de alertas."""
+        total = self.queryset.count()
+        by_severity = {}
+        by_status = {}
+        
+        for severity, _ in Alert.SEVERITY_LEVELS:
+            by_severity[severity] = self.queryset.filter(severity=severity).count()
+        
+        for status_val, _ in Alert.STATUS_CHOICES:
+            by_status[status_val] = self.queryset.filter(status=status_val).count()
+        
+        return Response({
+            'total': total,
+            'by_severity': by_severity,
+            'by_status': by_status
+        })
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def report_event(request):
+    """
+    Endpoint público para o script do aluno reportar eventos.
+    Requer api_key válida no corpo da requisição.
+    """
+    serializer = MonitoringEventCreateSerializer(
+        data=request.data,
+        context={'request': request}
+    )
+    
+    if serializer.is_valid():
+        event = serializer.save()
+        return Response(
+            {
+                'status': 'success',
+                'event_id': str(event.id),
+                'message': 'Evento registrado com sucesso'
+            },
+            status=status.HTTP_201_CREATED
+        )
+    
+    return Response(
+        {
+            'status': 'error',
+            'errors': serializer.errors
+        },
+        status=status.HTTP_400_BAD_REQUEST
+    )
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def heartbeat(request):
+    """
+    Endpoint para o script enviar heartbeat (confirmar que está ativo).
+    Cria o aluno automaticamente se não existir.
+    """
+    registration_number = request.data.get('registration_number')
+    student_name = request.data.get('student_name')
+    student_email = request.data.get('student_email')
+    
+    if not registration_number:
+        return Response(
+            {'error': 'registration_number is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        # Tentar buscar o aluno
+        student = Student.objects.get(registration_number=registration_number)
+        
+        # Verificar se está ativo
+        if not student.is_active:
+            return Response(
+                {'error': 'Aluno inativo. Entre em contato com a administração.'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        return Response({
+            'status': 'success',
+            'student': student.name,
+            'student_registration': student.registration_number,
+            'monitoring_active': True,
+            'new_student': False
+        })
+        
+    except Student.DoesNotExist:
+        # Se não existir, criar automaticamente
+        if not student_name or not student_email:
+            return Response({
+                'error': 'Aluno não cadastrado',
+                'requires_registration': True,
+                'message': 'Por favor, informe seu nome e email'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Criar novo aluno
+        student = Student.objects.create(
+            registration_number=registration_number,
+            name=student_name,
+            email=student_email,
+            is_active=True
+        )
+        
+        return Response({
+            'status': 'success',
+            'student': student.name,
+            'student_registration': student.registration_number,
+            'monitoring_active': True,
+            'new_student': True,
+            'message': 'Aluno cadastrado com sucesso!'
+        }, status=status.HTTP_201_CREATED)
+

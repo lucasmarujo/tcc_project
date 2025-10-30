@@ -1,0 +1,105 @@
+{% extends 'base.html' %}
+
+{% block title %}Eventos - Monitor de Alunos{% endblock %}
+
+{% block page_title %}Eventos{% endblock %}
+{% block page_subtitle %}Histórico de Eventos de Monitoramento{% endblock %}
+
+{% block content %}
+<!-- Filtros -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="table-card">
+            <form method="get" class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Tipo de Evento</label>
+                    <select name="type" class="form-select">
+                        <option value="">Todos</option>
+                        {% for value, label in event_types %}
+                        <option value="{{ value }}" {% if event_type == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Aluno</label>
+                    <select name="student" class="form-select">
+                        <option value="">Todos</option>
+                        {% for student in students %}
+                        <option value="{{ student.id }}" {% if student_id == student.id|stringformat:'s' %}selected{% endif %}>
+                            {{ student.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="submit" class="btn btn-primary d-block w-100">
+                        <i class="bi bi-funnel"></i> Filtrar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Lista de Eventos -->
+<div class="row">
+    <div class="col-12">
+        <div class="table-card">
+            <h5><i class="bi bi-list-ul"></i> Lista de Eventos</h5>
+            <div class="table-responsive">
+                <table class="table table-hover table-sm">
+                    <thead>
+                        <tr>
+                            <th>Aluno</th>
+                            <th>Tipo</th>
+                            <th>URL/App</th>
+                            <th>Navegador</th>
+                            <th>Máquina</th>
+                            <th>IP</th>
+                            <th>Data/Hora</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for event in events %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'dashboard:student_detail' event.student.id %}">
+                                    {{ event.student.name }}
+                                </a>
+                            </td>
+                            <td>
+                                <span class="badge bg-info">{{ event.get_event_type_display }}</span>
+                            </td>
+                            <td class="text-truncate" style="max-width: 300px;">
+                                {% if event.url %}
+                                    <a href="{{ event.url }}" target="_blank">{{ event.url }}</a>
+                                {% elif event.app_name %}
+                                    <i class="bi bi-app"></i> {{ event.app_name }}
+                                {% elif event.key_event %}
+                                    <i class="bi bi-keyboard"></i> <strong>{{ event.key_event }}</strong>
+                                    {% if event.additional_data.description %}
+                                        <br><small class="text-muted">{{ event.additional_data.description }}</small>
+                                    {% endif %}
+                                {% else %}
+                                    {{ event.window_title|default:"-" }}
+                                {% endif %}
+                            </td>
+                            <td>{{ event.browser|default:"-" }}</td>
+                            <td>{{ event.machine_name|default:"-" }}</td>
+                            <td>{{ event.ip_address|default:"-" }}</td>
+                            <td>{{ event.timestamp|date:"d/m/Y H:i:s" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted">Nenhum evento encontrado</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

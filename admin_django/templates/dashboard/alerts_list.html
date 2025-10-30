@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+
+{% block title %}Alertas - Monitor de Alunos{% endblock %}
+
+{% block page_title %}Alertas{% endblock %}
+{% block page_subtitle %}Gerenciamento de Alertas de Segurança{% endblock %}
+
+{% block content %}
+<!-- Filtros -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="table-card">
+            <form method="get" class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Status</label>
+                    <select name="status" class="form-select">
+                        <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Ativos</option>
+                        <option value="resolved" {% if status_filter == 'resolved' %}selected{% endif %}>Resolvidos</option>
+                        <option value="all" {% if status_filter == 'all' %}selected{% endif %}>Todos</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Severidade</label>
+                    <select name="severity" class="form-select">
+                        <option value="">Todas</option>
+                        <option value="low" {% if severity_filter == 'low' %}selected{% endif %}>Baixa</option>
+                        <option value="medium" {% if severity_filter == 'medium' %}selected{% endif %}>Média</option>
+                        <option value="high" {% if severity_filter == 'high' %}selected{% endif %}>Alta</option>
+                        <option value="critical" {% if severity_filter == 'critical' %}selected{% endif %}>Crítica</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="submit" class="btn btn-primary d-block w-100">
+                        <i class="bi bi-funnel"></i> Filtrar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Lista de Alertas -->
+<div class="row">
+    <div class="col-12">
+        <div class="table-card">
+            <h5><i class="bi bi-bell"></i> Lista de Alertas</h5>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Aluno</th>
+                            <th>Título</th>
+                            <th>Descrição</th>
+                            <th>Severidade</th>
+                            <th>Status</th>
+                            <th>Data</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for alert in alerts %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'dashboard:student_detail' alert.student.id %}">
+                                    {{ alert.student.name }}
+                                </a>
+                                <br>
+                                <small class="text-muted">{{ alert.student.registration_number }}</small>
+                            </td>
+                            <td><strong>{{ alert.title }}</strong></td>
+                            <td class="text-truncate" style="max-width: 300px;">{{ alert.description }}</td>
+                            <td>
+                                <span class="alert-badge severity-{{ alert.severity }}">
+                                    {{ alert.get_severity_display }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge-status bg-{{ alert.status }}">
+                                    {{ alert.get_status_display }}
+                                </span>
+                            </td>
+                            <td>{{ alert.created_at|date:"d/m/Y H:i" }}</td>
+                            <td>
+                                <a href="/admin/monitoring/alert/{{ alert.id }}/change/" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted">Nenhum alerta encontrado</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
