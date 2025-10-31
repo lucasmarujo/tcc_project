@@ -2,6 +2,7 @@
 Cliente para comunicação com a API do servidor Django.
 """
 import logging
+import socket
 import requests
 from typing import Dict, Optional
 
@@ -17,6 +18,7 @@ class APIClient:
         self.registration_number = registration_number
         self.student_name = student_name
         self.student_email = student_email
+        self.machine_name = socket.gethostname()
         self.session = requests.Session()
         self.session.headers.update({
             'Content-Type': 'application/json',
@@ -40,14 +42,15 @@ class APIClient:
     def send_heartbeat(self) -> Optional[Dict]:
         """
         Envia heartbeat para o servidor.
-        Inclui nome e email se disponíveis (para auto-cadastro).
+        Inclui nome, email e machine_name se disponíveis (para auto-cadastro).
         
         Returns:
             Resposta do servidor ou None em caso de erro
         """
         try:
             data = {
-                'registration_number': self.registration_number
+                'registration_number': self.registration_number,
+                'machine_name': self.machine_name
             }
             
             # Adicionar nome e email se disponíveis (para cadastro automático)

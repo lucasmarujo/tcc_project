@@ -42,10 +42,16 @@
     <div class="col-md-6">
         <div class="table-card">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5><i class="bi bi-people"></i> Status dos Alunos</h5>
+                <h5><i class="bi bi-people"></i> Alunos Online</h5>
                 <span class="badge bg-success" id="status-refresh">
                     <i class="bi bi-arrow-clockwise"></i> Atualização automática
                 </span>
+            </div>
+            
+            <div class="alert alert-info mb-3">
+                <i class="bi bi-info-circle"></i> Mostrando apenas alunos com o script rodando agora (heartbeat nos últimos 30 segundos)
+                <br>
+                <small>Se o aluno parar o script, ele desaparecerá da lista em até 30 segundos</small>
             </div>
             
             <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
@@ -55,22 +61,17 @@
                             <th>Status</th>
                             <th>RA</th>
                             <th>Nome</th>
+                            <th>Máquina</th>
                             <th>Última Atividade</th>
                         </tr>
                     </thead>
                     <tbody id="students-status-tbody">
                         {% for item in students_status %}
-                        <tr class="{% if item.is_online %}table-success{% endif %}">
+                        <tr class="table-success">
                             <td>
-                                {% if item.is_online %}
-                                    <span class="badge bg-success">
-                                        <i class="bi bi-circle-fill blink"></i> Online
-                                    </span>
-                                {% else %}
-                                    <span class="badge bg-secondary">
-                                        <i class="bi bi-circle"></i> Offline
-                                    </span>
-                                {% endif %}
+                                <span class="badge bg-success">
+                                    <i class="bi bi-circle-fill blink"></i> Online
+                                </span>
                             </td>
                             <td><strong>{{ item.registration_number }}</strong></td>
                             <td>
@@ -79,16 +80,21 @@
                                 </a>
                             </td>
                             <td>
-                                {% if item.last_activity %}
-                                    <small class="text-muted">{{ item.last_activity|date:"d/m/Y H:i:s" }}</small>
-                                {% else %}
-                                    <small class="text-muted">Nunca</small>
-                                {% endif %}
+                                <small class="text-muted">
+                                    <i class="bi bi-pc-display"></i> {{ item.machine_name|default:"-" }}
+                                </small>
+                            </td>
+                            <td>
+                                <small class="text-muted">{{ item.last_activity|date:"d/m/Y H:i:s" }}</small>
                             </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="4" class="text-center text-muted">Nenhum aluno cadastrado</td>
+                            <td colspan="5" class="text-center text-muted py-5">
+                                <i class="bi bi-person-x" style="font-size: 48px;"></i>
+                                <p class="mt-2">Nenhum aluno online no momento</p>
+                                <small>Os alunos aparecerão aqui quando iniciarem o script de monitoramento</small>
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -104,7 +110,7 @@
                     <span class="badge bg-success" id="connection-status">
                     <i class="bi bi-circle-fill"></i> Atualização ativa
                     </span>
-            </div>
+                </div>
             
             <div id="live-events" style="max-height: 500px; overflow-y: auto;">
                 {% if recent_events %}
@@ -128,7 +134,7 @@
                             {{ event.timestamp|date:"d/m/Y H:i:s" }}
                         </small>
                         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
+            </div>
                     {% endfor %}
                 {% else %}
                 <div class="text-center text-muted p-5">

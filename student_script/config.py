@@ -48,7 +48,7 @@ def clear_student_registration():
 
 # Configurações de monitoramento
 MONITORING_INTERVAL = 5  # segundos entre cada verificação
-HEARTBEAT_INTERVAL = 60  # segundos entre cada heartbeat
+HEARTBEAT_INTERVAL = 10  # segundos entre cada heartbeat (mais frequente para detecção rápida)
 
 # Navegadores suportados
 SUPPORTED_BROWSERS = {

@@ -35,6 +35,36 @@ class Student(models.Model):
         super().save(*args, **kwargs)
 
 
+class StudentHeartbeat(models.Model):
+    """Modelo para registrar heartbeats dos alunos (indica que o script está rodando)."""
+    
+    student = models.OneToOneField(
+        Student, 
+        on_delete=models.CASCADE, 
+        related_name='heartbeat',
+        verbose_name='Aluno'
+    )
+    last_heartbeat = models.DateTimeField('Último Heartbeat', auto_now=True)
+    machine_name = models.CharField('Nome da Máquina', max_length=200, blank=True)
+    ip_address = models.GenericIPAddressField('Endereço IP', blank=True, null=True)
+    
+    class Meta:
+        db_table = 'student_heartbeats'
+        verbose_name = 'Heartbeat do Aluno'
+        verbose_name_plural = 'Heartbeats dos Alunos'
+        ordering = ['-last_heartbeat']
+    
+    def __str__(self):
+        return f"{self.student.name} - {self.last_heartbeat.strftime('%d/%m/%Y %H:%M:%S')}"
+    
+    def is_online(self, threshold_seconds=120):
+        """Verifica se o aluno está online (heartbeat nos últimos X segundos)."""
+        from django.utils import timezone
+        from datetime import timedelta
+        threshold = timezone.now() - timedelta(seconds=threshold_seconds)
+        return self.last_heartbeat >= threshold
+
+
 class ExamSession(models.Model):
     """Modelo para representar uma sessão de exame."""
     

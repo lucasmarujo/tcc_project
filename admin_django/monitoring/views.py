@@ -140,15 +140,25 @@ def heartbeat(request):
     Endpoint para o script enviar heartbeat (confirmar que está ativo).
     Cria o aluno automaticamente se não existir.
     """
+    from students.models import StudentHeartbeat
+    
     registration_number = request.data.get('registration_number')
     student_name = request.data.get('student_name')
     student_email = request.data.get('student_email')
+    machine_name = request.data.get('machine_name', '')
     
     if not registration_number:
         return Response(
             {'error': 'registration_number is required'},
             status=status.HTTP_400_BAD_REQUEST
         )
+    
+    # Obter IP do cliente
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip_address = x_forwarded_for.split(',')[0]
+    else:
+        ip_address = request.META.get('REMOTE_ADDR')
     
     try:
         # Tentar buscar o aluno
@@ -161,12 +171,22 @@ def heartbeat(request):
                 status=status.HTTP_401_UNAUTHORIZED
             )
         
+        # Atualizar ou criar heartbeat
+        heartbeat_obj, created = StudentHeartbeat.objects.update_or_create(
+            student=student,
+            defaults={
+                'machine_name': machine_name,
+                'ip_address': ip_address
+            }
+        )
+        
         return Response({
             'status': 'success',
             'student': student.name,
             'student_registration': student.registration_number,
             'monitoring_active': True,
-            'new_student': False
+            'new_student': False,
+            'heartbeat_registered': True
         })
         
     except Student.DoesNotExist:
@@ -186,12 +206,20 @@ def heartbeat(request):
             is_active=True
         )
         
+        # Criar heartbeat inicial
+        StudentHeartbeat.objects.create(
+            student=student,
+            machine_name=machine_name,
+            ip_address=ip_address
+        )
+        
         return Response({
             'status': 'success',
             'student': student.name,
             'student_registration': student.registration_number,
             'monitoring_active': True,
             'new_student': True,
+            'heartbeat_registered': True,
             'message': 'Aluno cadastrado com sucesso!'
         }, status=status.HTTP_201_CREATED)
 

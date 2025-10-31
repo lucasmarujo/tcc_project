@@ -190,52 +190,49 @@ def events_list(request):
 @login_required
 def live_monitor(request):
     """View para monitoramento em tempo real."""
-    from django.db.models import Max
+    from students.models import StudentHeartbeat
     
-    # Obter todos os alunos ativos
-    all_students = Student.objects.filter(is_active=True).order_by('name')
+    # Obter apenas alunos com heartbeat recente (últimos 30 segundos)
+    # Com heartbeat a cada 10s, se passar 30s sem heartbeat = script parou
+    time_threshold = timezone.now() - timedelta(seconds=30)
     
-    # Identificar alunos que estão "online" (com eventos nos últimos 5 minutos)
-    time_threshold = timezone.now() - timedelta(minutes=5)
+    # Buscar heartbeats recentes
+    online_heartbeats = StudentHeartbeat.objects.filter(
+        last_heartbeat__gte=time_threshold,
+        student__is_active=True
+    ).select_related('student').order_by('student__name')
     
-    # Para cada aluno, verificar último evento
+    # Montar lista de alunos online
     students_status = []
-    for student in all_students:
-        last_event = MonitoringEvent.objects.filter(
-            student=student
-        ).order_by('-timestamp').first()
-        
-        is_online = False
-        last_activity = None
-        
-        if last_event:
-            last_activity = last_event.timestamp
-            is_online = last_event.timestamp >= time_threshold
-        
+    for heartbeat in online_heartbeats:
         students_status.append({
-            'student': student,
-            'is_online': is_online,
-            'last_activity': last_activity,
-            'registration_number': student.registration_number,
-            'name': student.name,
-            'email': student.email
+            'student': heartbeat.student,
+            'is_online': True,
+            'last_activity': heartbeat.last_heartbeat,
+            'registration_number': heartbeat.student.registration_number,
+            'name': heartbeat.student.name,
+            'email': heartbeat.student.email,
+            'machine_name': heartbeat.machine_name,
+            'ip_address': heartbeat.ip_address
         })
     
-    # Contar online/offline
-    online_count = sum(1 for s in students_status if s['is_online'])
-    offline_count = len(students_status) - online_count
+    # Contar totais
+    online_count = len(students_status)
+    total_students = Student.objects.filter(is_active=True).count()
+    offline_count = total_students - online_count
     
-    # Eventos recentes (últimos 20)
-    recent_events = MonitoringEvent.objects.select_related(
-        'student'
-    ).order_by('-timestamp')[:20]
+    # Eventos recentes apenas dos alunos online (últimos 20)
+    online_student_ids = [s['student'].id for s in students_status]
+    recent_events = MonitoringEvent.objects.filter(
+        student_id__in=online_student_ids
+    ).select_related('student').order_by('-timestamp')[:20]
     
     context = {
         'page_title': 'Monitoramento em Tempo Real',
         'students_status': students_status,
         'online_count': online_count,
         'offline_count': offline_count,
-        'total_students': len(students_status),
+        'total_students': total_students,
         'recent_events': recent_events,
     }
     
