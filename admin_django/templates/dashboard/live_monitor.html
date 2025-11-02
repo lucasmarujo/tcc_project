@@ -6,6 +6,76 @@
 {% block page_subtitle %}Acompanhamento em Tempo Real{% endblock %}
 
 {% block content %}
+<!-- Cards de Webcam dos Alunos -->
+<div class="mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4><i class="bi bi-camera-video"></i> Webcam dos Alunos em Tempo Real</h4>
+        <span class="badge bg-info">
+            <i class="bi bi-broadcast"></i> Streaming Ao Vivo
+        </span>
+    </div>
+    
+    <div id="webcam-grid" class="row g-3">
+        {% for item in students_status %}
+        <div class="col-lg-6 col-md-12 col-sm-12">
+            <div class="card webcam-card shadow-sm">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>{{ item.name }}</strong>
+                        <br>
+                        <small>RA: {{ item.registration_number }}</small>
+                    </div>
+                    <span class="badge bg-success webcam-status" id="status-{{ item.registration_number }}">
+                        <i class="bi bi-circle-fill blink"></i> Conectado
+                    </span>
+                </div>
+                <div class="card-body p-0 bg-dark position-relative">
+                    <img 
+                        id="webcam-{{ item.registration_number }}" 
+                        class="webcam-feed" 
+                        src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='360'%3E%3Crect width='640' height='360' fill='%23333'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23fff' font-size='18'%3EAguardando stream...%3C/text%3E%3C/svg%3E"
+                        alt="Webcam {{ item.name }}"
+                        loading="eager"
+                        decoding="async"
+                    >
+                    <div class="webcam-overlay">
+                        <small class="text-white">
+                            <i class="bi bi-pc-display"></i> {{ item.machine_name|default:"-" }}
+                        </small>
+                    </div>
+                    <button class="btn btn-sm btn-light fullscreen-btn" onclick="toggleFullscreen('webcam-{{ item.registration_number }}')" title="Tela cheia">
+                        <i class="bi bi-fullscreen"></i>
+                    </button>
+                    <div class="detection-info" id="detection-{{ item.registration_number }}">
+                        <!-- Informações de detecção aparecerão aqui -->
+                    </div>
+                </div>
+                <div class="card-footer bg-light">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <small class="text-muted">
+                            <i class="bi bi-clock"></i> 
+                            <span id="last-frame-{{ item.registration_number }}">Aguardando...</span>
+                        </small>
+                        <small class="text-muted">
+                            <span id="fps-{{ item.registration_number }}">0 FPS</span>
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-12">
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i>
+                Nenhum aluno online no momento. Os alunos aparecerão aqui quando iniciarem o script de monitoramento.
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<hr class="my-4">
+
 <!-- Estatísticas de Status -->
 <div class="row mb-4">
     <div class="col-md-4">
@@ -150,6 +220,167 @@
 
 {% block extra_js %}
 <script>
+    // WebSocket connections para cada aluno
+    const webcamConnections = {};
+    const frameCounters = {};
+    const lastFrameTimes = {};
+    
+    // Conectar aos WebSockets de webcam para cada aluno
+    function connectWebcams() {
+        {% for item in students_status %}
+        connectWebcam('{{ item.registration_number }}', '{{ item.name }}');
+        {% endfor %}
+    }
+    
+    function connectWebcam(registrationNumber, studentName) {
+        // Construir URL do WebSocket
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws/webcam-view/${registrationNumber}/`;
+        
+        console.log(`Conectando ao WebSocket de webcam: ${wsUrl}`);
+        
+        try {
+            const ws = new WebSocket(wsUrl);
+            
+            ws.onopen = function(e) {
+                console.log(`WebSocket conectado para ${studentName} (${registrationNumber})`);
+                updateStatus(registrationNumber, 'Conectado', 'success');
+                
+                // Inicializar contadores
+                frameCounters[registrationNumber] = 0;
+                lastFrameTimes[registrationNumber] = Date.now();
+            };
+            
+            ws.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    if (data.type === 'webcam_frame') {
+                        processWebcamFrame(registrationNumber, data);
+                    }
+                } catch (error) {
+                    console.error(`Erro ao processar mensagem: ${error}`);
+                }
+            };
+            
+            ws.onerror = function(error) {
+                console.error(`Erro no WebSocket para ${studentName}: ${error}`);
+                updateStatus(registrationNumber, 'Erro', 'danger');
+            };
+            
+            ws.onclose = function(event) {
+                console.log(`WebSocket fechado para ${studentName}`);
+                updateStatus(registrationNumber, 'Desconectado', 'warning');
+                
+                // Tentar reconectar após 5 segundos
+                setTimeout(() => {
+                    console.log(`Tentando reconectar ${studentName}...`);
+                    connectWebcam(registrationNumber, studentName);
+                }, 5000);
+            };
+            
+            webcamConnections[registrationNumber] = ws;
+            
+        } catch (error) {
+            console.error(`Erro ao conectar WebSocket para ${studentName}: ${error}`);
+        }
+    }
+    
+    function processWebcamFrame(registrationNumber, data) {
+        const frameData = data.data;
+        
+        // Atualizar imagem de forma mais eficiente
+        const imgElement = document.getElementById(`webcam-${registrationNumber}`);
+        if (imgElement && frameData.frame) {
+            // Usar requestAnimationFrame para sincronizar com a taxa de atualização do navegador
+            requestAnimationFrame(() => {
+                imgElement.src = `data:image/jpeg;base64,${frameData.frame}`;
+            });
+        }
+        
+        // Atualizar informações de detecção
+        const detectionElement = document.getElementById(`detection-${registrationNumber}`);
+        if (detectionElement && frameData.detections) {
+            updateDetectionInfo(registrationNumber, frameData.detections);
+        }
+        
+        // Atualizar timestamp do último frame
+        const lastFrameElement = document.getElementById(`last-frame-${registrationNumber}`);
+        if (lastFrameElement) {
+            const now = new Date();
+            lastFrameElement.textContent = now.toLocaleTimeString();
+        }
+        
+        // Calcular e atualizar FPS
+        frameCounters[registrationNumber] = (frameCounters[registrationNumber] || 0) + 1;
+        const now = Date.now();
+        const elapsed = (now - (lastFrameTimes[registrationNumber] || now)) / 1000;
+        
+        if (elapsed >= 1.0) {
+            const fps = frameCounters[registrationNumber] / elapsed;
+            const fpsElement = document.getElementById(`fps-${registrationNumber}`);
+            if (fpsElement) {
+                fpsElement.textContent = `${fps.toFixed(1)} FPS`;
+            }
+            
+            frameCounters[registrationNumber] = 0;
+            lastFrameTimes[registrationNumber] = now;
+        }
+    }
+    
+    function updateDetectionInfo(registrationNumber, detections) {
+        const detectionElement = document.getElementById(`detection-${registrationNumber}`);
+        if (!detectionElement) return;
+        
+        if (detections.length === 0) {
+            detectionElement.innerHTML = '';
+            return;
+        }
+        
+        let html = '<div class="detection-badges">';
+        
+        for (const det of detections) {
+            const className = det.class;
+            const confidence = (det.confidence * 100).toFixed(1);
+            const badgeClass = className === 'permitido' ? 'bg-success' : 'bg-danger';
+            
+            html += `<span class="badge ${badgeClass} m-1">`;
+            html += `<i class="bi bi-${className === 'permitido' ? 'check-circle' : 'x-circle'}"></i> `;
+            html += `${className}: ${confidence}%`;
+            html += `</span>`;
+        }
+        
+        html += '</div>';
+        detectionElement.innerHTML = html;
+    }
+    
+    function updateStatus(registrationNumber, status, type) {
+        const statusElement = document.getElementById(`status-${registrationNumber}`);
+        if (statusElement) {
+            statusElement.className = `badge bg-${type} webcam-status`;
+            statusElement.innerHTML = `<i class="bi bi-circle-fill ${type === 'success' ? 'blink' : ''}"></i> ${status}`;
+        }
+    }
+    
+    // Função para alternar tela cheia
+    function toggleFullscreen(imgId) {
+        const imgElement = document.getElementById(imgId);
+        if (!imgElement) return;
+        
+        if (!document.fullscreenElement) {
+            imgElement.requestFullscreen().catch(err => {
+                console.error(`Erro ao entrar em tela cheia: ${err.message}`);
+            });
+        } else {
+            document.exitFullscreen();
+        }
+    }
+    
+    // Conectar aos WebSockets quando a página carregar
+    document.addEventListener('DOMContentLoaded', function() {
+        connectWebcams();
+    });
+    
     // Função para atualizar status dos alunos
     function atualizarStatusAlunos() {
         const statusElement = document.querySelector('#status-refresh');
@@ -293,6 +524,162 @@
     
     #live-events::-webkit-scrollbar-thumb:hover {
         background: #555;
+    }
+    
+    /* Estilos para cards de webcam */
+    .webcam-card {
+        border: none;
+        border-radius: 12px;
+        overflow: hidden;
+        transition: transform 0.2s, box-shadow 0.2s;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    
+    .webcam-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15) !important;
+    }
+    
+    .card-body {
+        aspect-ratio: 16 / 9;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .webcam-feed {
+        width: 100%;
+        height: auto;
+        display: block;
+        background: #1a1a1a;
+        min-height: 300px;
+        max-height: 450px;
+        object-fit: contain;
+        image-rendering: -webkit-optimize-contrast;
+        will-change: contents;
+        backface-visibility: hidden;
+        transform: translateZ(0);
+    }
+    
+    .webcam-overlay {
+        position: absolute;
+        top: 15px;
+        left: 15px;
+        background: rgba(0, 0, 0, 0.85);
+        padding: 8px 15px;
+        border-radius: 6px;
+        font-size: 0.95rem;
+        backdrop-filter: blur(5px);
+    }
+    
+    .detection-info {
+        position: absolute;
+        bottom: 15px;
+        left: 15px;
+        right: 15px;
+    }
+    
+    .detection-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    
+    .detection-badges .badge {
+        font-size: 0.9rem;
+        padding: 6px 12px;
+        font-weight: 600;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+    
+    .webcam-status {
+        font-size: 0.9rem;
+        padding: 0.35rem 0.75rem;
+    }
+    
+    .card-header {
+        border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+        padding: 1rem 1.25rem;
+        font-size: 1rem;
+    }
+    
+    .card-header strong {
+        font-size: 1.1rem;
+    }
+    
+    .card-footer {
+        border-top: 1px solid rgba(0, 0, 0, 0.125);
+        padding: 0.75rem 1.25rem;
+        font-size: 0.95rem;
+    }
+    
+    /* Grid responsivo */
+    #webcam-grid {
+        display: grid;
+        gap: 1.5rem;
+    }
+    
+    @media (min-width: 1400px) {
+        #webcam-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    
+    @media (min-width: 1920px) {
+        #webcam-grid {
+            grid-template-columns: repeat(3, 1fr);
+        }
+    }
+    
+    @media (max-width: 1399px) {
+        #webcam-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    
+    /* Animação de loading */
+    @keyframes pulse {
+        0%, 100% {
+            opacity: 1;
+        }
+        50% {
+            opacity: 0.5;
+        }
+    }
+    
+    .webcam-feed[src*="svg"] {
+        animation: pulse 2s ease-in-out infinite;
+    }
+    
+    /* Botão de tela cheia */
+    .fullscreen-btn {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        opacity: 0;
+        transition: opacity 0.3s;
+        z-index: 10;
+        border-radius: 6px;
+        padding: 8px 12px;
+        background: rgba(255, 255, 255, 0.9) !important;
+        backdrop-filter: blur(5px);
+    }
+    
+    .card-body:hover .fullscreen-btn {
+        opacity: 1;
+    }
+    
+    .fullscreen-btn:hover {
+        background: rgba(255, 255, 255, 1) !important;
+        transform: scale(1.1);
+    }
+    
+    /* Estilo para imagem em tela cheia */
+    .webcam-feed:fullscreen {
+        object-fit: contain;
+        background: #000;
+        width: 100vw;
+        height: 100vh;
     }
 </style>
 {% endblock %}

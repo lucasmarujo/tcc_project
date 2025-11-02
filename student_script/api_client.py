@@ -4,9 +4,13 @@ Cliente para comunicação com a API do servidor Django.
 import logging
 import socket
 import requests
+import json
+import threading
+import time
 from typing import Dict, Optional
+import websocket
 
-from config import REPORT_ENDPOINT, HEARTBEAT_ENDPOINT
+from config import REPORT_ENDPOINT, HEARTBEAT_ENDPOINT, SERVER_URL
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +28,12 @@ class APIClient:
             'Content-Type': 'application/json',
             'User-Agent': 'StudentMonitor/1.0'
         })
+        
+        # WebSocket para streaming de webcam
+        self.ws = None
+        self.ws_connected = False
+        self.ws_thread = None
+        self.ws_running = False
     
     def test_connection(self) -> bool:
         """
@@ -127,4 +137,135 @@ class APIClient:
         except Exception as e:
             logger.error(f"Erro ao obter status: {e}")
             return None
+    
+    def connect_webcam_stream(self) -> bool:
+        """
+        Conecta ao WebSocket para streaming de webcam.
+        
+        Returns:
+            True se conectado com sucesso, False caso contrário
+        """
+        try:
+            if self.ws_connected:
+                logger.warning("WebSocket já está conectado")
+                return True
+            
+            # Construir URL do WebSocket
+            ws_url = SERVER_URL.replace('http://', 'ws://').replace('https://', 'wss://')
+            ws_url = f"{ws_url}/ws/webcam/{self.registration_number}/"
+            
+            logger.info(f"Conectando WebSocket: {ws_url}")
+            
+            # Criar WebSocket
+            self.ws = websocket.WebSocketApp(
+                ws_url,
+                on_open=self._on_ws_open,
+                on_message=self._on_ws_message,
+                on_error=self._on_ws_error,
+                on_close=self._on_ws_close
+            )
+            
+            # Iniciar thread do WebSocket
+            self.ws_running = True
+            self.ws_thread = threading.Thread(target=self._ws_run, daemon=True)
+            self.ws_thread.start()
+            
+            # Aguardar conexão (timeout de 5 segundos)
+            timeout = 5
+            start_time = time.time()
+            while not self.ws_connected and time.time() - start_time < timeout:
+                time.sleep(0.1)
+            
+            if self.ws_connected:
+                logger.info("WebSocket conectado com sucesso")
+                return True
+            else:
+                logger.error("Timeout ao conectar WebSocket")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Erro ao conectar WebSocket: {e}", exc_info=True)
+            return False
+    
+    def disconnect_webcam_stream(self):
+        """Desconecta o WebSocket."""
+        logger.info("Desconectando WebSocket...")
+        self.ws_running = False
+        
+        if self.ws:
+            self.ws.close()
+        
+        if self.ws_thread:
+            self.ws_thread.join(timeout=3)
+        
+        self.ws_connected = False
+        logger.info("WebSocket desconectado")
+    
+    def send_webcam_frame(self, frame_data: Dict) -> bool:
+        """
+        Envia um frame de webcam via WebSocket.
+        
+        Args:
+            frame_data: Dicionário com dados do frame
+            
+        Returns:
+            True se enviado com sucesso, False caso contrário
+        """
+        try:
+            if not self.ws_connected or not self.ws:
+                return False
+            
+            # Adicionar informações do aluno
+            message = {
+                'type': 'webcam_frame',
+                'registration_number': self.registration_number,
+                'student_name': self.student_name,
+                'machine_name': self.machine_name,
+                'data': frame_data
+            }
+            
+            # Enviar via WebSocket (não bloqueante)
+            message_json = json.dumps(message)
+            self.ws.send(message_json)
+            return True
+            
+        except Exception as e:
+            # Não logar cada erro para não sobrecarregar
+            if hasattr(self, '_last_error_log_time'):
+                if time.time() - self._last_error_log_time > 5:  # Log a cada 5 segundos
+                    logger.error(f"Erro ao enviar frame via WebSocket: {e}")
+                    self._last_error_log_time = time.time()
+            else:
+                self._last_error_log_time = time.time()
+            return False
+    
+    def _ws_run(self):
+        """Thread que executa o WebSocket."""
+        try:
+            self.ws.run_forever()
+        except Exception as e:
+            logger.error(f"Erro no WebSocket run_forever: {e}")
+    
+    def _on_ws_open(self, ws):
+        """Callback quando WebSocket é aberto."""
+        logger.info("WebSocket aberto")
+        self.ws_connected = True
+    
+    def _on_ws_message(self, ws, message):
+        """Callback quando mensagem é recebida."""
+        try:
+            data = json.loads(message)
+            logger.debug(f"Mensagem recebida do WebSocket: {data}")
+        except Exception as e:
+            logger.error(f"Erro ao processar mensagem do WebSocket: {e}")
+    
+    def _on_ws_error(self, ws, error):
+        """Callback quando ocorre erro no WebSocket."""
+        logger.error(f"Erro no WebSocket: {error}")
+        self.ws_connected = False
+    
+    def _on_ws_close(self, ws, close_status_code, close_msg):
+        """Callback quando WebSocket é fechado."""
+        logger.info(f"WebSocket fechado: {close_status_code} - {close_msg}")
+        self.ws_connected = False
 

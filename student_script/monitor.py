@@ -20,6 +20,8 @@ from browser_monitor import BrowserMonitor
 from api_client import APIClient
 from keyboard_monitor import KeyboardMonitor
 from display_monitor import check_multiple_monitors, get_monitor_info_text
+from webcam_monitor import WebcamMonitor
+from pathlib import Path
 
 # Configuração de logging
 logging.basicConfig(
@@ -49,6 +51,10 @@ class StudentMonitor:
         self.monitored_apps = set()
         self.monitored_titles = set()  # Para evitar reportar títulos repetidos
         self.reported_key_events = set()  # Para evitar reportar teclas múltiplas vezes rapidamente
+        
+        # Webcam monitor
+        model_path = Path(__file__).parent / 'face_detection_model' / 'yolov8m_200e.pt'
+        self.webcam_monitor = WebcamMonitor(str(model_path), frame_callback=self._handle_webcam_frame)
         
     def start(self):
         """Inicia o monitoramento."""
@@ -93,6 +99,15 @@ class StudentMonitor:
         # Iniciar monitor de teclado
         self.keyboard_monitor.start()
         
+        # Conectar WebSocket para streaming de webcam
+        logger.info("Conectando ao WebSocket para streaming de webcam...")
+        if self.api_client.connect_webcam_stream():
+            logger.info("WebSocket conectado, iniciando captura de webcam...")
+            # Iniciar webcam monitor
+            self.webcam_monitor.start()
+        else:
+            logger.warning("Não foi possível conectar ao WebSocket. Webcam não será transmitida.")
+        
         # Iniciar threads
         monitor_thread = threading.Thread(target=self._monitor_loop, daemon=True)
         heartbeat_thread = threading.Thread(target=self._heartbeat_loop, daemon=True)
@@ -111,6 +126,8 @@ class StudentMonitor:
             logger.info("Parando monitoramento...")
             self.running = False
             self.keyboard_monitor.stop()
+            self.webcam_monitor.stop()
+            self.api_client.disconnect_webcam_stream()
     
     def _monitor_loop(self):
         """Loop principal de monitoramento."""
@@ -339,6 +356,38 @@ class StudentMonitor:
         
         except Exception as e:
             logger.error(f"Erro ao processar evento de teclado: {e}", exc_info=True)
+    
+    def _handle_webcam_frame(self, frame_data: dict):
+        """
+        Manipula frames capturados pela webcam.
+        Envia os frames para o servidor via WebSocket.
+        
+        Args:
+            frame_data: Dados do frame (incluindo imagem base64 e detecções)
+        """
+        try:
+            # Enviar frame via WebSocket
+            success = self.api_client.send_webcam_frame(frame_data)
+            
+            if not success:
+                logger.debug("Falha ao enviar frame da webcam")
+            
+            # Log de detecções (apenas se houver)
+            if frame_data.get('detections'):
+                detections = frame_data['detections']
+                if len(detections) > 0:
+                    for det in detections:
+                        class_name = det['class']
+                        confidence = det['confidence']
+                        
+                        # Log diferentes dependendo da classe
+                        if class_name == 'nao_permitido':
+                            logger.warning(f"ALERTA: Situação não permitida detectada! (confiança: {confidence:.2f})")
+                        else:
+                            logger.debug(f"Detecção: {class_name} (confiança: {confidence:.2f})")
+        
+        except Exception as e:
+            logger.error(f"Erro ao processar frame da webcam: {e}", exc_info=True)
     
     def _cleanup_loop(self):
         """Loop para limpar sets periodicamente."""

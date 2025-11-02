@@ -38,3 +38,6 @@ Pillow==10.1.0  # unificado (não repita com "pillow")
 numpy==1.26.4
 tqdm==4.66.5
 pyyaml==6.0.2
+
+# --- WebSocket para streaming ---
+websocket-client==1.6.4
