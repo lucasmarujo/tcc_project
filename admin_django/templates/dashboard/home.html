@@ -94,6 +94,7 @@
                         <tr>
                             <th>Aluno</th>
                             <th>Alerta</th>
+                            <th>Descrição</th>
                             <th>Severidade</th>
                             <th>Data</th>
                             <th>Ações</th>
@@ -107,7 +108,12 @@
                                     {{ alert.student.name }}
                                 </a>
                             </td>
-                            <td>{{ alert.title }}</td>
+                            <td><strong>{{ alert.title }}</strong></td>
+                            <td>
+                                <small class="text-muted">
+                                    {{ alert.description|default:"-"|truncatewords:15 }}
+                                </small>
+                            </td>
                             <td>
                                 <span class="alert-badge severity-{{ alert.severity }}">
                                     {{ alert.get_severity_display }}
@@ -122,7 +128,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="5" class="text-center text-muted">Nenhum alerta recente</td>
+                            <td colspan="6" class="text-center text-muted">Nenhum alerta recente</td>
                         </tr>
                         {% endfor %}
                     </tbody>

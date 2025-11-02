@@ -21,6 +21,7 @@ from api_client import APIClient
 from keyboard_monitor import KeyboardMonitor
 from display_monitor import check_multiple_monitors, get_monitor_info_text
 from webcam_monitor import WebcamMonitor
+from screen_monitor import ScreenMonitor
 from pathlib import Path
 
 # Configuração de logging
@@ -55,6 +56,9 @@ class StudentMonitor:
         # Webcam monitor
         model_path = Path(__file__).parent / 'face_detection_model' / 'yolov8m_200e.pt'
         self.webcam_monitor = WebcamMonitor(str(model_path), frame_callback=self._handle_webcam_frame)
+        
+        # Screen monitor
+        self.screen_monitor = ScreenMonitor(frame_callback=self._handle_screen_frame)
         
     def start(self):
         """Inicia o monitoramento."""
@@ -102,11 +106,20 @@ class StudentMonitor:
         # Conectar WebSocket para streaming de webcam
         logger.info("Conectando ao WebSocket para streaming de webcam...")
         if self.api_client.connect_webcam_stream():
-            logger.info("WebSocket conectado, iniciando captura de webcam...")
+            logger.info("WebSocket de webcam conectado, iniciando captura de webcam...")
             # Iniciar webcam monitor
             self.webcam_monitor.start()
         else:
-            logger.warning("Não foi possível conectar ao WebSocket. Webcam não será transmitida.")
+            logger.warning("Não foi possível conectar ao WebSocket de webcam. Webcam não será transmitida.")
+        
+        # Conectar WebSocket para streaming de tela
+        logger.info("Conectando ao WebSocket para streaming de tela...")
+        if self.api_client.connect_screen_stream():
+            logger.info("WebSocket de tela conectado, iniciando captura de tela...")
+            # Iniciar screen monitor
+            self.screen_monitor.start()
+        else:
+            logger.warning("Não foi possível conectar ao WebSocket de tela. Tela não será transmitida.")
         
         # Iniciar threads
         monitor_thread = threading.Thread(target=self._monitor_loop, daemon=True)
@@ -127,7 +140,9 @@ class StudentMonitor:
             self.running = False
             self.keyboard_monitor.stop()
             self.webcam_monitor.stop()
+            self.screen_monitor.stop()
             self.api_client.disconnect_webcam_stream()
+            self.api_client.disconnect_screen_stream()
     
     def _monitor_loop(self):
         """Loop principal de monitoramento."""
@@ -388,6 +403,24 @@ class StudentMonitor:
         
         except Exception as e:
             logger.error(f"Erro ao processar frame da webcam: {e}", exc_info=True)
+    
+    def _handle_screen_frame(self, frame_data: dict):
+        """
+        Manipula frames capturados da tela.
+        Envia os frames para o servidor via WebSocket.
+        
+        Args:
+            frame_data: Dados do frame (incluindo imagem base64)
+        """
+        try:
+            # Enviar frame via WebSocket
+            success = self.api_client.send_screen_frame(frame_data)
+            
+            if not success:
+                logger.debug("Falha ao enviar frame da tela")
+        
+        except Exception as e:
+            logger.error(f"Erro ao processar frame da tela: {e}", exc_info=True)
     
     def _cleanup_loop(self):
         """Loop para limpar sets periodicamente."""

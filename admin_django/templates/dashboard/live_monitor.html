@@ -19,45 +19,79 @@
         {% for item in students_status %}
         <div class="col-lg-6 col-md-12 col-sm-12">
             <div class="card webcam-card shadow-sm">
-                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <div class="card-header d-flex justify-content-between align-items-center">
                     <div>
                         <strong>{{ item.name }}</strong>
                         <br>
                         <small>RA: {{ item.registration_number }}</small>
                     </div>
                     <span class="badge bg-success webcam-status" id="status-{{ item.registration_number }}">
-                        <i class="bi bi-circle-fill blink"></i> Conectado
+                        <i class="bi bi-circle-fill blink"></i> Online
                     </span>
                 </div>
-                <div class="card-body p-0 bg-dark position-relative">
-                    <img 
-                        id="webcam-{{ item.registration_number }}" 
-                        class="webcam-feed" 
-                        src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='360'%3E%3Crect width='640' height='360' fill='%23333'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23fff' font-size='18'%3EAguardando stream...%3C/text%3E%3C/svg%3E"
-                        alt="Webcam {{ item.name }}"
-                        loading="eager"
-                        decoding="async"
-                    >
-                    <div class="webcam-overlay">
-                        <small class="text-white">
-                            <i class="bi bi-pc-display"></i> {{ item.machine_name|default:"-" }}
-                        </small>
+                
+                <!-- Webcam Section -->
+                <div class="stream-section webcam-section">
+                    <div class="stream-label">
+                        <i class="bi bi-camera-video"></i> Webcam
                     </div>
-                    <button class="btn btn-sm btn-light fullscreen-btn" onclick="toggleFullscreen('webcam-{{ item.registration_number }}')" title="Tela cheia">
-                        <i class="bi bi-fullscreen"></i>
-                    </button>
-                    <div class="detection-info" id="detection-{{ item.registration_number }}">
-                        <!-- Informações de detecção aparecerão aqui -->
+                    <div class="card-body p-0 bg-dark position-relative">
+                        <img 
+                            id="webcam-{{ item.registration_number }}" 
+                            class="webcam-feed" 
+                            src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='360'%3E%3Crect width='640' height='360' fill='%23333'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23fff' font-size='16'%3EAguardando webcam...%3C/text%3E%3C/svg%3E"
+                            alt="Webcam {{ item.name }}"
+                            loading="eager"
+                            decoding="async"
+                        >
+                        <div class="webcam-overlay">
+                            <small class="text-white">
+                                <i class="bi bi-pc-display"></i> {{ item.machine_name|default:"-" }}
+                            </small>
+                        </div>
+                        <button class="btn btn-sm btn-light fullscreen-btn" onclick="toggleFullscreen('webcam-{{ item.registration_number }}')" title="Tela cheia">
+                            <i class="bi bi-fullscreen"></i>
+                        </button>
+                        <div class="detection-info" id="detection-{{ item.registration_number }}">
+                            <!-- Informações de detecção aparecerão aqui -->
+                        </div>
                     </div>
-                </div>
-                <div class="card-footer bg-light">
-                    <div class="d-flex justify-content-between align-items-center">
+                    <div class="stream-footer">
                         <small class="text-muted">
                             <i class="bi bi-clock"></i> 
                             <span id="last-frame-{{ item.registration_number }}">Aguardando...</span>
                         </small>
                         <small class="text-muted">
                             <span id="fps-{{ item.registration_number }}">0 FPS</span>
+                        </small>
+                    </div>
+                </div>
+                
+                <!-- Screen Section -->
+                <div class="stream-section screen-section">
+                    <div class="stream-label">
+                        <i class="bi bi-display"></i> Tela
+                    </div>
+                    <div class="card-body p-0 bg-dark position-relative">
+                        <img 
+                            id="screen-{{ item.registration_number }}" 
+                            class="screen-feed" 
+                            src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='960' height='540'%3E%3Crect width='960' height='540' fill='%23222'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23777' font-size='16'%3EAguardando tela...%3C/text%3E%3C/svg%3E"
+                            alt="Tela {{ item.name }}"
+                            loading="eager"
+                            decoding="async"
+                        >
+                        <button class="btn btn-sm btn-light fullscreen-btn" onclick="toggleFullscreen('screen-{{ item.registration_number }}')" title="Tela cheia">
+                            <i class="bi bi-fullscreen"></i>
+                        </button>
+                    </div>
+                    <div class="stream-footer">
+                        <small class="text-muted">
+                            <i class="bi bi-clock"></i> 
+                            <span id="last-screen-frame-{{ item.registration_number }}">Aguardando...</span>
+                        </small>
+                        <small class="text-muted">
+                            <span id="screen-fps-{{ item.registration_number }}">0 FPS</span>
                         </small>
                     </div>
                 </div>
@@ -74,14 +108,12 @@
     </div>
 </div>
 
-<hr class="my-4">
-
 <!-- Estatísticas de Status -->
 <div class="row mb-4">
     <div class="col-md-4">
         <div class="stat-card success">
             <div class="stat-icon">
-                <i class="bi bi-check-circle"></i>
+                <i class="bi bi-check-circle-fill"></i>
             </div>
             <div class="stat-value" id="stat-online">{{ online_count }}</div>
             <div class="stat-label">Alunos Online</div>
@@ -90,16 +122,16 @@
     <div class="col-md-4">
         <div class="stat-card warning">
             <div class="stat-icon">
-                <i class="bi bi-dash-circle"></i>
+                <i class="bi bi-dash-circle-fill"></i>
             </div>
             <div class="stat-value" id="stat-offline">{{ offline_count }}</div>
-            <div class="stat-label">Alunos Offline</div>
+            <div class="stat-label">Offline</div>
         </div>
     </div>
     <div class="col-md-4">
         <div class="stat-card primary">
             <div class="stat-icon">
-                <i class="bi bi-people"></i>
+                <i class="bi bi-people-fill"></i>
             </div>
             <div class="stat-value" id="stat-total">{{ total_students }}</div>
             <div class="stat-label">Total de Alunos</div>
@@ -222,13 +254,17 @@
 <script>
     // WebSocket connections para cada aluno
     const webcamConnections = {};
+    const screenConnections = {};
     const frameCounters = {};
+    const screenFrameCounters = {};
     const lastFrameTimes = {};
+    const lastScreenFrameTimes = {};
     
-    // Conectar aos WebSockets de webcam para cada aluno
+    // Conectar aos WebSockets de webcam e tela para cada aluno
     function connectWebcams() {
         {% for item in students_status %}
         connectWebcam('{{ item.registration_number }}', '{{ item.name }}');
+        connectScreen('{{ item.registration_number }}', '{{ item.name }}');
         {% endfor %}
     }
     
@@ -373,6 +409,92 @@
             });
         } else {
             document.exitFullscreen();
+        }
+    }
+    
+    function connectScreen(registrationNumber, studentName) {
+        // Construir URL do WebSocket de tela
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws/screen-view/${registrationNumber}/`;
+        
+        console.log(`Conectando ao WebSocket de tela: ${wsUrl}`);
+        
+        try {
+            const ws = new WebSocket(wsUrl);
+            
+            ws.onopen = function(e) {
+                console.log(`WebSocket de tela conectado para ${studentName} (${registrationNumber})`);
+                
+                // Inicializar contadores
+                screenFrameCounters[registrationNumber] = 0;
+                lastScreenFrameTimes[registrationNumber] = Date.now();
+            };
+            
+            ws.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    if (data.type === 'screen_frame') {
+                        processScreenFrame(registrationNumber, data);
+                    }
+                } catch (error) {
+                    console.error(`Erro ao processar mensagem de tela: ${error}`);
+                }
+            };
+            
+            ws.onerror = function(error) {
+                console.error(`Erro no WebSocket de tela para ${studentName}: ${error}`);
+            };
+            
+            ws.onclose = function(event) {
+                console.log(`WebSocket de tela fechado para ${studentName}`);
+                
+                // Tentar reconectar após 5 segundos
+                setTimeout(() => {
+                    console.log(`Tentando reconectar tela de ${studentName}...`);
+                    connectScreen(registrationNumber, studentName);
+                }, 5000);
+            };
+            
+            screenConnections[registrationNumber] = ws;
+            
+        } catch (error) {
+            console.error(`Erro ao conectar WebSocket de tela para ${studentName}: ${error}`);
+        }
+    }
+    
+    function processScreenFrame(registrationNumber, data) {
+        const frameData = data.data;
+        
+        // Atualizar imagem de forma eficiente
+        const imgElement = document.getElementById(`screen-${registrationNumber}`);
+        if (imgElement && frameData.frame) {
+            requestAnimationFrame(() => {
+                imgElement.src = `data:image/jpeg;base64,${frameData.frame}`;
+            });
+        }
+        
+        // Atualizar timestamp do último frame
+        const lastFrameElement = document.getElementById(`last-screen-frame-${registrationNumber}`);
+        if (lastFrameElement) {
+            const now = new Date();
+            lastFrameElement.textContent = now.toLocaleTimeString();
+        }
+        
+        // Calcular e atualizar FPS
+        screenFrameCounters[registrationNumber] = (screenFrameCounters[registrationNumber] || 0) + 1;
+        const now = Date.now();
+        const elapsed = (now - (lastScreenFrameTimes[registrationNumber] || now)) / 1000;
+        
+        if (elapsed >= 1.0) {
+            const fps = screenFrameCounters[registrationNumber] / elapsed;
+            const fpsElement = document.getElementById(`screen-fps-${registrationNumber}`);
+            if (fpsElement) {
+                fpsElement.textContent = `${fps.toFixed(1)} FPS`;
+            }
+            
+            screenFrameCounters[registrationNumber] = 0;
+            lastScreenFrameTimes[registrationNumber] = now;
         }
     }
     
@@ -526,39 +648,38 @@
         background: #555;
     }
     
-    /* Estilos para cards de webcam */
+    /* Estilos para cards de webcam - Minimalista */
     .webcam-card {
-        border: none;
+        border: 1px solid var(--border-color, #e5e7eb);
         border-radius: 12px;
         overflow: hidden;
-        transition: transform 0.2s, box-shadow 0.2s;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        transition: all 0.2s ease;
+        background: var(--bg-primary, #ffffff);
     }
     
     .webcam-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15) !important;
+        border-color: var(--primary-color, #004a94);
+        box-shadow: 0 4px 12px rgba(0, 74, 148, 0.08);
     }
     
-    .card-body {
-        aspect-ratio: 16 / 9;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+    .stream-section .card-body {
+        padding: 0 !important;
+        margin: 0;
+        line-height: 0;
+        display: block;
     }
     
     .webcam-feed {
         width: 100%;
         height: auto;
         display: block;
-        background: #1a1a1a;
-        min-height: 300px;
-        max-height: 450px;
-        object-fit: contain;
+        background: #000;
+        object-fit: cover;
         image-rendering: -webkit-optimize-contrast;
         will-change: contents;
         backface-visibility: hidden;
         transform: translateZ(0);
+        vertical-align: middle;
     }
     
     .webcam-overlay {
@@ -586,31 +707,61 @@
     }
     
     .detection-badges .badge {
-        font-size: 0.9rem;
+        font-size: 11px;
         padding: 6px 12px;
         font-weight: 600;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        border-radius: 6px;
+    }
+    
+    .detection-badges .badge.bg-success {
+        background: #ecfdf5 !important;
+        color: #059669 !important;
+        border: 1px solid #d1fae5;
+    }
+    
+    .detection-badges .badge.bg-danger {
+        background: #fef2f2 !important;
+        color: #dc2626 !important;
+        border: 1px solid #fecaca;
     }
     
     .webcam-status {
-        font-size: 0.9rem;
-        padding: 0.35rem 0.75rem;
+        font-size: 12px;
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-weight: 600;
+    }
+    
+    .webcam-status.bg-success {
+        background: #ecfdf5 !important;
+        color: #059669 !important;
+        border: 1px solid #d1fae5;
     }
     
     .card-header {
-        border-bottom: 2px solid rgba(255, 255, 255, 0.2);
-        padding: 1rem 1.25rem;
+        background: var(--bg-primary, #ffffff) !important;
+        border-bottom: 1px solid var(--border-color, #e5e7eb) !important;
+        padding: 16px 20px;
         font-size: 1rem;
     }
     
     .card-header strong {
-        font-size: 1.1rem;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text-primary, #1a1a1a);
+    }
+    
+    .card-header small {
+        color: var(--text-secondary, #6b7280);
+        font-size: 13px;
     }
     
     .card-footer {
-        border-top: 1px solid rgba(0, 0, 0, 0.125);
+        border-top: 1px solid var(--border-color, #e5e7eb);
         padding: 0.75rem 1.25rem;
         font-size: 0.95rem;
+        background: var(--bg-secondary, #f9fafb);
     }
     
     /* Grid responsivo */
@@ -647,8 +798,63 @@
         }
     }
     
-    .webcam-feed[src*="svg"] {
+    .webcam-feed[src*="svg"], .screen-feed[src*="svg"] {
         animation: pulse 2s ease-in-out infinite;
+    }
+    
+    /* Seções de stream */
+    .stream-section {
+        border-bottom: 1px solid #dee2e6;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .stream-section:last-of-type {
+        border-bottom: none;
+    }
+    
+    .stream-label {
+        background: var(--bg-secondary, #f9fafb);
+        padding: 10px 16px;
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--text-secondary, #6b7280);
+        border-bottom: 1px solid var(--border-color, #e5e7eb);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .stream-label i {
+        margin-right: 6px;
+        color: var(--primary-color, #004a94);
+    }
+    
+    .stream-footer {
+        background: var(--bg-secondary, #f9fafb);
+        padding: 10px 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-top: 1px solid var(--border-color, #e5e7eb);
+        font-size: 12px;
+        color: var(--text-secondary, #6b7280);
+    }
+    
+    .screen-feed {
+        width: 100%;
+        height: auto;
+        display: block;
+        background: #000;
+        object-fit: cover;
+        image-rendering: -webkit-optimize-contrast;
+        will-change: contents;
+        backface-visibility: hidden;
+        transform: translateZ(0);
+        vertical-align: middle;
+    }
+    
+    .screen-section {
+        margin-top: 0;
     }
     
     /* Botão de tela cheia */

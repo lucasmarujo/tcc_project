@@ -34,6 +34,12 @@ class APIClient:
         self.ws_connected = False
         self.ws_thread = None
         self.ws_running = False
+        
+        # WebSocket para streaming de tela
+        self.ws_screen = None
+        self.ws_screen_connected = False
+        self.ws_screen_thread = None
+        self.ws_screen_running = False
     
     def test_connection(self) -> bool:
         """
@@ -268,4 +274,137 @@ class APIClient:
         """Callback quando WebSocket é fechado."""
         logger.info(f"WebSocket fechado: {close_status_code} - {close_msg}")
         self.ws_connected = False
+    
+    # ===== SCREEN SHARING WEBSOCKET =====
+    
+    def connect_screen_stream(self) -> bool:
+        """
+        Conecta ao WebSocket para streaming de tela.
+        
+        Returns:
+            True se conectado com sucesso, False caso contrário
+        """
+        try:
+            if self.ws_screen_connected:
+                logger.warning("WebSocket de tela já está conectado")
+                return True
+            
+            # Construir URL do WebSocket
+            ws_url = SERVER_URL.replace('http://', 'ws://').replace('https://', 'wss://')
+            ws_url = f"{ws_url}/ws/screen/{self.registration_number}/"
+            
+            logger.info(f"Conectando WebSocket de tela: {ws_url}")
+            
+            # Criar WebSocket
+            self.ws_screen = websocket.WebSocketApp(
+                ws_url,
+                on_open=self._on_ws_screen_open,
+                on_message=self._on_ws_screen_message,
+                on_error=self._on_ws_screen_error,
+                on_close=self._on_ws_screen_close
+            )
+            
+            # Iniciar thread do WebSocket
+            self.ws_screen_running = True
+            self.ws_screen_thread = threading.Thread(target=self._ws_screen_run, daemon=True)
+            self.ws_screen_thread.start()
+            
+            # Aguardar conexão (timeout de 5 segundos)
+            timeout = 5
+            start_time = time.time()
+            while not self.ws_screen_connected and time.time() - start_time < timeout:
+                time.sleep(0.1)
+            
+            if self.ws_screen_connected:
+                logger.info("WebSocket de tela conectado com sucesso")
+                return True
+            else:
+                logger.error("Timeout ao conectar WebSocket de tela")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Erro ao conectar WebSocket de tela: {e}", exc_info=True)
+            return False
+    
+    def disconnect_screen_stream(self):
+        """Desconecta o WebSocket de tela."""
+        logger.info("Desconectando WebSocket de tela...")
+        self.ws_screen_running = False
+        
+        if self.ws_screen:
+            self.ws_screen.close()
+        
+        if self.ws_screen_thread:
+            self.ws_screen_thread.join(timeout=3)
+        
+        self.ws_screen_connected = False
+        logger.info("WebSocket de tela desconectado")
+    
+    def send_screen_frame(self, frame_data: Dict) -> bool:
+        """
+        Envia um frame de tela via WebSocket.
+        
+        Args:
+            frame_data: Dicionário com dados do frame
+            
+        Returns:
+            True se enviado com sucesso, False caso contrário
+        """
+        try:
+            if not self.ws_screen_connected or not self.ws_screen:
+                return False
+            
+            # Adicionar informações do aluno
+            message = {
+                'type': 'screen_frame',
+                'registration_number': self.registration_number,
+                'student_name': self.student_name,
+                'machine_name': self.machine_name,
+                'data': frame_data
+            }
+            
+            # Enviar via WebSocket (não bloqueante)
+            message_json = json.dumps(message)
+            self.ws_screen.send(message_json)
+            return True
+            
+        except Exception as e:
+            # Não logar cada erro para não sobrecarregar
+            if hasattr(self, '_last_screen_error_log_time'):
+                if time.time() - self._last_screen_error_log_time > 5:
+                    logger.error(f"Erro ao enviar frame de tela via WebSocket: {e}")
+                    self._last_screen_error_log_time = time.time()
+            else:
+                self._last_screen_error_log_time = time.time()
+            return False
+    
+    def _ws_screen_run(self):
+        """Thread que executa o WebSocket de tela."""
+        try:
+            self.ws_screen.run_forever()
+        except Exception as e:
+            logger.error(f"Erro no WebSocket de tela run_forever: {e}")
+    
+    def _on_ws_screen_open(self, ws):
+        """Callback quando WebSocket de tela é aberto."""
+        logger.info("WebSocket de tela aberto")
+        self.ws_screen_connected = True
+    
+    def _on_ws_screen_message(self, ws, message):
+        """Callback quando mensagem é recebida."""
+        try:
+            data = json.loads(message)
+            logger.debug(f"Mensagem recebida do WebSocket de tela: {data}")
+        except Exception as e:
+            logger.error(f"Erro ao processar mensagem do WebSocket de tela: {e}")
+    
+    def _on_ws_screen_error(self, ws, error):
+        """Callback quando ocorre erro no WebSocket de tela."""
+        logger.error(f"Erro no WebSocket de tela: {error}")
+        self.ws_screen_connected = False
+    
+    def _on_ws_screen_close(self, ws, close_status_code, close_msg):
+        """Callback quando WebSocket de tela é fechado."""
+        logger.info(f"WebSocket de tela fechado: {close_status_code} - {close_msg}")
+        self.ws_screen_connected = False
 
