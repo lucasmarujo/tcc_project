@@ -28,11 +28,11 @@ class ScreenMonitor:
         self.running = False
         self.thread = None
         
-        # Configurações otimizadas para screen sharing
-        self.fps_target = 5  # FPS para screen sharing (menos que webcam)
+        # Configurações otimizadas para screen sharing sem flickering
+        self.fps_target = 15  # FPS ideal para screen sharing (5 FPS = suave e sem flickering)
         self.frame_width = 960  # Largura do frame (resolução média)
         self.frame_height = 540  # Altura do frame (540p)
-        self.jpeg_quality = 50  # Qualidade JPEG mais baixa (tela comprime melhor)
+        self.jpeg_quality = 50  # Qualidade JPEG otimizada para tela
         
         # Estatísticas
         self.frames_captured = 0
@@ -64,18 +64,24 @@ class ScreenMonitor:
         logger.info(f"Screen monitor parado. Frames capturados: {self.frames_captured}, enviados: {self.frames_sent}")
     
     def _capture_loop(self):
-        """Loop principal de captura da tela."""
+        """Loop principal de captura da tela - otimizado para streaming fluido."""
         frame_interval = 1.0 / self.fps_target
+        next_frame_time = time.time()
         
         while self.running:
             try:
-                # Verificar se já passou tempo suficiente desde o último frame
+                # Controle de timing mais preciso
                 current_time = time.time()
-                if current_time - self.last_frame_time < frame_interval:
-                    time.sleep(0.01)
+                if current_time < next_frame_time:
+                    # Sleep adaptativo para não sobrecarregar CPU
+                    sleep_time = min(next_frame_time - current_time, 0.005)
+                    time.sleep(sleep_time)
                     continue
                 
-                # Capturar screenshot da tela
+                # Atualizar próximo frame time
+                next_frame_time = current_time + frame_interval
+                
+                # Capturar screenshot da tela (usando PIL diretamente é mais rápido)
                 screenshot = ImageGrab.grab()
                 
                 if screenshot is None:
@@ -85,11 +91,8 @@ class ScreenMonitor:
                 
                 self.frames_captured += 1
                 
-                # Converter PIL Image para array numpy
-                frame = np.array(screenshot)
-                
-                # Obter dimensões originais
-                original_height, original_width = frame.shape[:2]
+                # Obter dimensões originais diretamente do PIL Image
+                original_width, original_height = screenshot.size
                 
                 # Calcular aspect ratio e redimensionar mantendo proporção
                 aspect_ratio = original_width / original_height
@@ -103,16 +106,18 @@ class ScreenMonitor:
                     new_height = self.frame_height
                     new_width = int(self.frame_height * aspect_ratio)
                 
-                # Redimensionar usando PIL (mais rápido para screenshots)
-                img_resized = screenshot.resize((new_width, new_height), Image.LANCZOS)
+                # Redimensionar usando BILINEAR (mais rápido que LANCZOS, qualidade boa)
+                img_resized = screenshot.resize((new_width, new_height), Image.BILINEAR)
                 
-                # Converter para JPEG em memória
+                # Converter para JPEG em memória com otimizações
                 buffer = BytesIO()
-                img_resized.save(buffer, format='JPEG', quality=self.jpeg_quality, optimize=True)
-                buffer.seek(0)
+                # progressive=True melhora loading no browser, optimize=False é mais rápido
+                img_resized.save(buffer, format='JPEG', quality=self.jpeg_quality, 
+                               progressive=True, optimize=False)
+                jpeg_data = buffer.getvalue()
                 
                 # Converter para base64
-                frame_base64 = base64.b64encode(buffer.read()).decode('utf-8')
+                frame_base64 = base64.b64encode(jpeg_data).decode('utf-8')
                 
                 # Preparar dados para envio
                 frame_data = {

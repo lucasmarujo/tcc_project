@@ -72,16 +72,14 @@
                     <div class="stream-label">
                         <i class="bi bi-display"></i> Tela
                     </div>
-                    <div class="card-body p-0 bg-dark position-relative">
-                        <img 
-                            id="screen-{{ item.registration_number }}" 
+                    <div class="card-body p-0 bg-dark position-relative" id="screen-container-{{ item.registration_number }}">
+                        <canvas 
+                            id="screen-canvas-{{ item.registration_number }}" 
                             class="screen-feed" 
-                            src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='960' height='540'%3E%3Crect width='960' height='540' fill='%23222'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23777' font-size='16'%3EAguardando tela...%3C/text%3E%3C/svg%3E"
-                            alt="Tela {{ item.name }}"
-                            loading="eager"
-                            decoding="async"
-                        >
-                        <button class="btn btn-sm btn-light fullscreen-btn" onclick="toggleFullscreen('screen-{{ item.registration_number }}')" title="Tela cheia">
+                            width="960" 
+                            height="540"
+                        ></canvas>
+                        <button class="btn btn-sm btn-light fullscreen-btn" onclick="toggleFullscreenCanvas('screen-canvas-{{ item.registration_number }}')" title="Tela cheia">
                             <i class="bi bi-fullscreen"></i>
                         </button>
                     </div>
@@ -260,6 +258,17 @@
     const lastFrameTimes = {};
     const lastScreenFrameTimes = {};
     
+    // Sistema anti-flickering para screen com off-screen buffer
+    const screenFrameBuffers = {};
+    const screenOffscreenCanvas = {};
+    const screenRenderLocks = {};
+    const screenLastRenderTime = {};
+    const screenPendingFrames = {};
+    
+    // Sistema anti-flickering para webcam
+    const webcamRenderLocks = {};
+    const webcamLastRenderTime = {};
+    
     // Conectar aos WebSockets de webcam e tela para cada aluno
     function connectWebcams() {
         {% for item in students_status %}
@@ -325,13 +334,50 @@
     function processWebcamFrame(registrationNumber, data) {
         const frameData = data.data;
         
-        // Atualizar imagem de forma mais eficiente
+        // Sistema robusto anti-flickering com controle de renderização
         const imgElement = document.getElementById(`webcam-${registrationNumber}`);
         if (imgElement && frameData.frame) {
-            // Usar requestAnimationFrame para sincronizar com a taxa de atualização do navegador
-            requestAnimationFrame(() => {
-                imgElement.src = `data:image/jpeg;base64,${frameData.frame}`;
-            });
+            // Inicializar controles se necessário
+            if (!webcamRenderLocks[registrationNumber]) {
+                webcamRenderLocks[registrationNumber] = false;
+                webcamLastRenderTime[registrationNumber] = 0;
+            }
+            
+            // Verificar se já está renderizando
+            if (webcamRenderLocks[registrationNumber]) {
+                return;
+            }
+            
+            // Throttling: mínimo de 40ms entre frames (máximo 25 FPS no display)
+            const now = Date.now();
+            const timeSinceLastRender = now - webcamLastRenderTime[registrationNumber];
+            if (timeSinceLastRender < 40) {
+                return;
+            }
+            
+            // Travar renderização
+            webcamRenderLocks[registrationNumber] = true;
+            
+            // Criar nova imagem e pré-carregar
+            const tempImg = new Image();
+            const dataUrl = `data:image/jpeg;base64,${frameData.frame}`;
+            
+            tempImg.onload = function() {
+                requestAnimationFrame(() => {
+                    imgElement.src = dataUrl;
+                    webcamLastRenderTime[registrationNumber] = Date.now();
+                    
+                    setTimeout(() => {
+                        webcamRenderLocks[registrationNumber] = false;
+                    }, 10);
+                });
+            };
+            
+            tempImg.onerror = function() {
+                webcamRenderLocks[registrationNumber] = false;
+            };
+            
+            tempImg.src = dataUrl;
         }
         
         // Atualizar informações de detecção
@@ -340,7 +386,7 @@
             updateDetectionInfo(registrationNumber, frameData.detections);
         }
         
-        // Atualizar timestamp do último frame
+        // Atualizar timestamp do último frame recebido
         const lastFrameElement = document.getElementById(`last-frame-${registrationNumber}`);
         if (lastFrameElement) {
             const now = new Date();
@@ -399,13 +445,27 @@
         }
     }
     
-    // Função para alternar tela cheia
+    // Função para alternar tela cheia (img)
     function toggleFullscreen(imgId) {
         const imgElement = document.getElementById(imgId);
         if (!imgElement) return;
         
         if (!document.fullscreenElement) {
             imgElement.requestFullscreen().catch(err => {
+                console.error(`Erro ao entrar em tela cheia: ${err.message}`);
+            });
+        } else {
+            document.exitFullscreen();
+        }
+    }
+    
+    // Função para alternar tela cheia (canvas)
+    function toggleFullscreenCanvas(canvasId) {
+        const canvasElement = document.getElementById(canvasId);
+        if (!canvasElement) return;
+        
+        if (!document.fullscreenElement) {
+            canvasElement.requestFullscreen().catch(err => {
                 console.error(`Erro ao entrar em tela cheia: ${err.message}`);
             });
         } else {
@@ -467,24 +527,113 @@
     function processScreenFrame(registrationNumber, data) {
         const frameData = data.data;
         
-        // Atualizar imagem de forma eficiente
-        const imgElement = document.getElementById(`screen-${registrationNumber}`);
-        if (imgElement && frameData.frame) {
-            requestAnimationFrame(() => {
-                imgElement.src = `data:image/jpeg;base64,${frameData.frame}`;
-            });
+        // Sistema ROBUSTO anti-flickering com off-screen buffer e throttling agressivo
+        const canvas = document.getElementById(`screen-canvas-${registrationNumber}`);
+        if (!canvas || !frameData.frame) return;
+        
+        // Inicializar estruturas de controle
+        if (!screenRenderLocks[registrationNumber]) {
+            screenRenderLocks[registrationNumber] = false;
+            screenLastRenderTime[registrationNumber] = 0;
+            screenPendingFrames[registrationNumber] = null;
+            
+            // Criar off-screen canvas para buffer
+            const offscreen = document.createElement('canvas');
+            offscreen.width = canvas.width;
+            offscreen.height = canvas.height;
+            screenOffscreenCanvas[registrationNumber] = offscreen;
+            
+            // Preencher canvas inicial
+            const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#666';
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('Aguardando tela...', canvas.width / 2, canvas.height / 2);
         }
         
-        // Atualizar timestamp do último frame
+        // THROTTLING AGRESSIVO: mínimo 200ms entre frames (máximo 5 FPS no display)
+        const now = Date.now();
+        const timeSinceLastRender = now - screenLastRenderTime[registrationNumber];
+        
+        if (timeSinceLastRender < 200) {
+            // Guardar frame mais recente para processar depois
+            screenPendingFrames[registrationNumber] = frameData.frame;
+            return;
+        }
+        
+        // Se já está renderizando, guardar para processar depois
+        if (screenRenderLocks[registrationNumber]) {
+            screenPendingFrames[registrationNumber] = frameData.frame;
+            return;
+        }
+        
+        // Usar frame pendente se houver (mais recente)
+        const frameToProcess = screenPendingFrames[registrationNumber] || frameData.frame;
+        screenPendingFrames[registrationNumber] = null;
+        
+        // Travar renderização
+        screenRenderLocks[registrationNumber] = true;
+        
+        // Criar imagem e processar
+        const img = new Image();
+        img.onload = function() {
+            requestAnimationFrame(() => {
+                try {
+                    const offscreen = screenOffscreenCanvas[registrationNumber];
+                    
+                    // Ajustar tamanho do off-screen canvas se necessário
+                    if (offscreen.width !== img.width || offscreen.height !== img.height) {
+                        offscreen.width = img.width;
+                        offscreen.height = img.height;
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                    }
+                    
+                    // Desenhar no off-screen buffer primeiro
+                    const offCtx = offscreen.getContext('2d', { alpha: false });
+                    offCtx.drawImage(img, 0, 0, img.width, img.height);
+                    
+                    // Copiar do off-screen para canvas principal (SUPER RÁPIDO)
+                    const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+                    ctx.drawImage(offscreen, 0, 0);
+                    
+                    screenLastRenderTime[registrationNumber] = Date.now();
+                } catch (e) {
+                    console.error('Erro ao desenhar no canvas:', e);
+                }
+                
+                // Liberar lock após delay para garantir rendering completo
+                setTimeout(() => {
+                    screenRenderLocks[registrationNumber] = false;
+                    
+                    // Processar frame pendente se houver
+                    if (screenPendingFrames[registrationNumber]) {
+                        processScreenFrame(registrationNumber, { 
+                            data: { frame: screenPendingFrames[registrationNumber] } 
+                        });
+                    }
+                }, 30);
+            });
+        };
+        
+        img.onerror = function() {
+            screenRenderLocks[registrationNumber] = false;
+        };
+        
+        // Iniciar carregamento
+        img.src = `data:image/jpeg;base64,${frameToProcess}`;
+        
+        // Atualizar timestamp do último frame recebido
         const lastFrameElement = document.getElementById(`last-screen-frame-${registrationNumber}`);
         if (lastFrameElement) {
-            const now = new Date();
-            lastFrameElement.textContent = now.toLocaleTimeString();
+            lastFrameElement.textContent = new Date().toLocaleTimeString();
         }
         
         // Calcular e atualizar FPS
         screenFrameCounters[registrationNumber] = (screenFrameCounters[registrationNumber] || 0) + 1;
-        const now = Date.now();
         const elapsed = (now - (lastScreenFrameTimes[registrationNumber] || now)) / 1000;
         
         if (elapsed >= 1.0) {
@@ -677,10 +826,23 @@
         background: #000;
         object-fit: cover;
         image-rendering: -webkit-optimize-contrast;
-        will-change: contents;
+        image-rendering: crisp-edges;
+        will-change: auto;
         backface-visibility: hidden;
         transform: translateZ(0);
         vertical-align: middle;
+        /* Anti-flickering CSS avançado */
+        -webkit-transform: translate3d(0, 0, 0);
+        transform: translate3d(0, 0, 0);
+        -webkit-backface-visibility: hidden;
+        -moz-backface-visibility: hidden;
+        -ms-backface-visibility: hidden;
+        /* Prevenir repainting */
+        contain: paint;
+        content-visibility: auto;
+        /* Transição suave */
+        transition: none;
+        pointer-events: auto;
     }
     
     .webcam-overlay {
@@ -799,7 +961,7 @@
         }
     }
     
-    .webcam-feed[src*="svg"], .screen-feed[src*="svg"] {
+    .webcam-feed[src*="svg"] {
         animation: pulse 2s ease-in-out infinite;
     }
     
@@ -845,13 +1007,36 @@
         width: 100%;
         height: auto;
         display: block;
-        background: #000;
-        object-fit: cover;
+        background: #1a1a1a;
+        object-fit: contain;
         image-rendering: -webkit-optimize-contrast;
-        will-change: contents;
+        image-rendering: crisp-edges;
+        will-change: auto;
         backface-visibility: hidden;
         transform: translateZ(0);
         vertical-align: middle;
+        /* Anti-flickering CSS avançado */
+        -webkit-transform: translate3d(0, 0, 0);
+        transform: translate3d(0, 0, 0);
+        -webkit-backface-visibility: hidden;
+        -moz-backface-visibility: hidden;
+        -ms-backface-visibility: hidden;
+        /* Prevenir repainting */
+        contain: paint;
+        content-visibility: auto;
+        /* Transição suave */
+        transition: none;
+        pointer-events: auto;
+    }
+    
+    /* Canvas em tela cheia */
+    canvas.screen-feed:fullscreen {
+        object-fit: contain;
+        background: #000;
+        width: 100vw !important;
+        height: 100vh !important;
+        max-width: 100vw;
+        max-height: 100vh;
     }
     
     .screen-section {
@@ -881,7 +1066,7 @@
         transform: scale(1.1);
     }
     
-    /* Estilo para imagem em tela cheia */
+    /* Estilo para webcam em tela cheia */
     .webcam-feed:fullscreen {
         object-fit: contain;
         background: #000;
