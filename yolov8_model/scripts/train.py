@@ -18,10 +18,10 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 # CONFIGURAÇÕES
 # ===========================
 EPOCHS = 100
-IMG_SIZE = 640  # Tamanho padrão do YOLOv8
+IMG_SIZE = 640
 BATCH_SIZE = 16
-MODEL_SIZE = 'n'  # n, s, m, l, x (nano, small, medium, large, xlarge)
-PATIENCE = 20  # Early stopping
+MODEL_SIZE = 'n'
+PATIENCE = 20
 DATA_DIR = Path(__file__).parent.parent / "data"
 MODELS_DIR = Path(__file__).parent / "models"
 CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
@@ -43,18 +43,25 @@ print(f"   - Diretório de dados: {DATA_DIR}")
 print("=" * 80)
 
 # ===========================
-# VERIFICAR ESTRUTURA DE DADOS
+# VERIFICAR ESTRUTURA DE DADOS (dinâmica)
 # ===========================
 print("\n📁 Verificando estrutura de dados...")
 
-permitido_dir = DATA_DIR / "permitido"
-nao_permitido_dir = DATA_DIR / "nao_permitido"
+# Detecta automaticamente se há subpasta 'train/'
+if (DATA_DIR / "train").exists():
+    base_dir = DATA_DIR / "train"
+else:
+    base_dir = DATA_DIR
+
+permitido_dir = base_dir / "permitido"
+nao_permitido_dir = base_dir / "nao_permitido"
 
 if not permitido_dir.exists() or not nao_permitido_dir.exists():
     print("❌ ERRO: Estrutura de dados incorreta!")
-    print(f"   Esperado: {DATA_DIR}/permitido e {DATA_DIR}/nao_permitido")
+    print(f"   Esperado: {base_dir}/permitido e {base_dir}/nao_permitido")
     sys.exit(1)
 
+# Contagem de imagens
 num_permitido = len(list(permitido_dir.glob("*.jpg"))) + len(list(permitido_dir.glob("*.png")))
 num_nao_permitido = len(list(nao_permitido_dir.glob("*.jpg"))) + len(list(nao_permitido_dir.glob("*.png")))
 total_images = num_permitido + num_nao_permitido
@@ -72,9 +79,9 @@ print("\n📝 Criando arquivo de configuração...")
 
 config_data = {
     'path': str(DATA_DIR.absolute()),
-    'train': str(DATA_DIR.absolute()),
-    'val': str(DATA_DIR.absolute()),
-    'test': str(DATA_DIR.absolute()),
+    'train': str(base_dir.absolute()),
+    'val': str(base_dir.absolute()),
+    'test': str(base_dir.absolute()),
     'names': {
         0: 'nao_permitido',
         1: 'permitido'
@@ -107,7 +114,7 @@ print("=" * 80)
 
 try:
     results = model.train(
-        data=str(CONFIG_PATH),
+        data=str(DATA_DIR),
         epochs=EPOCHS,
         imgsz=IMG_SIZE,
         batch=BATCH_SIZE,
@@ -154,8 +161,7 @@ try:
     # SALVAR MODELO FINAL
     # ===========================
     print("\n💾 Salvando modelo final...")
-    
-    # Copiar melhor modelo para pasta final_model
+
     best_model_path = MODELS_DIR / "training_run" / "weights" / "best.pt"
     final_model_path = MODELS_DIR / "final_model" / "best.pt"
     
@@ -169,8 +175,7 @@ try:
     # GERAR RELATÓRIO
     # ===========================
     print("\n📝 Gerando relatório de treinamento...")
-    
-    # Extrair métricas do results
+
     metrics = results.results_dict if hasattr(results, 'results_dict') else {}
     
     report = f"""
@@ -196,7 +201,7 @@ try:
    Imagens 'permitido':      {num_permitido}
    Imagens 'nao_permitido':  {num_nao_permitido}
    Total de Imagens:         {total_images}
-   Split:                    Auto (YOLOv8 faz split automático)
+   Diretório usado:          {base_dir}
 
 🎯 RESULTADOS FINAIS
    Acurácia (Top1):       {metrics.get('metrics/accuracy_top1', 'N/A')}
@@ -224,7 +229,6 @@ try:
 {'=' * 80}
 """
     
-    # Salvar relatório
     report_path = MODELS_DIR / "final_model" / "training_report.txt"
     with open(report_path, 'w', encoding='utf-8') as f:
         f.write(report)
@@ -234,7 +238,7 @@ try:
     print("=" * 80)
     print("✨ PROCESSO COMPLETO!")
     print("=" * 80)
-    
+
 except Exception as e:
     print(f"\n❌ ERRO durante o treinamento: {str(e)}")
     import traceback

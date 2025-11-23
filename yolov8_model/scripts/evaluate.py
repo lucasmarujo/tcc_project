@@ -21,7 +21,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 # ===========================
 MODELS_DIR = Path(__file__).parent / "models"
 MODEL_PATH = MODELS_DIR / "final_model" / "best.pt"
-DATA_DIR = Path(__file__).parent.parent / "data"
+DATA_DIR = Path(__file__).parent.parent / "data" / "val"
 RESULTS_DIR = MODELS_DIR / "final_model"
 
 # Classes do modelo

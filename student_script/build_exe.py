@@ -14,9 +14,12 @@ from pathlib import Path
 def build_executable():
     """Compila o script em executável."""
     
-    print("=" * 60)
+    print("=" * 70)
     print("  Compilando Monitor de Alunos para Executável")
-    print("=" * 60)
+    print("=" * 70)
+    print()
+    print("ATENÇÃO: Este processo pode demorar vários minutos.")
+    print("O executável final pode ter 500MB+ devido aos modelos YOLO.")
     print()
     
     # Verificar se PyInstaller está instalado
@@ -27,79 +30,35 @@ def build_executable():
         print("PyInstaller não encontrado. Instalando...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"])
     
-    # Verificar se o modelo existe
-    model_path = Path(__file__).parent / 'face_detection_model' / 'yolov8m_200e.pt'
-    if not model_path.exists():
-        print(f"❌ ERRO: Modelo não encontrado em {model_path}")
-        print("   O modelo YOLOv8 é essencial para o funcionamento!")
-        return False
-    
-    print(f"✓ Modelo encontrado: {model_path}")
-    print()
-    
-    # Preparar separador para Windows
-    separator = ';' if sys.platform == 'win32' else ':'
-    
-    # Comando PyInstaller
+    # Comando PyInstaller otimizado
     pyinstaller_cmd = [
         'pyinstaller',
-        '--onedir',  # Usar --onedir por causa do modelo grande (198MB)
-        '--console',  # COM console para ver logs e erros
-        '--name=MonitorAluno',
-        
-        # Adicionar o modelo YOLOv8 (CRÍTICO!)
-        f'--add-data=face_detection_model{separator}face_detection_model',
-        
-        # Adicionar arquivos de configuração e dados
-        f'--add-data=url_bloqueadas.txt{separator}.',
-        f'--add-data=student_config.json{separator}.' if Path('student_config.json').exists() else '',
-        
-        # Adicionar módulos Python necessários
-        f'--add-data=api_client.py{separator}.',
-        f'--add-data=browser_monitor.py{separator}.',
-        f'--add-data=keyboard_monitor.py{separator}.',
-        f'--add-data=display_monitor.py{separator}.',
-        f'--add-data=screen_monitor.py{separator}.',
-        f'--add-data=webcam_monitor.py{separator}.',
-        f'--add-data=config.py{separator}.',
-        
-        # Hidden imports (bibliotecas que PyInstaller pode não detectar)
+        '--onefile',  # Criar um único executável
+        '--console',  # COM janela de console para ver logs
+        '--name=MonitorAluno',  # Nome do executável
+        # Adicionar arquivos de dados
+        '--add-data=config.py;.',
+        '--add-data=url_bloqueadas.txt;.',
+        '--add-data=face_detection_model;face_detection_model',
+        # Hidden imports necessários
         '--hidden-import=win32gui',
         '--hidden-import=win32process',
         '--hidden-import=win32api',
         '--hidden-import=win32con',
-        '--hidden-import=pywintypes',
-        '--hidden-import=win32com',
-        '--hidden-import=pynput',
-        '--hidden-import=pynput.keyboard',
-        '--hidden-import=pynput.mouse',
-        '--hidden-import=screeninfo',
         '--hidden-import=cv2',
+        '--hidden-import=PIL',
+        '--hidden-import=numpy',
         '--hidden-import=ultralytics',
         '--hidden-import=torch',
-        '--hidden-import=torchvision',
-        '--hidden-import=omegaconf',  # CRÍTICO: Necessário para carregar modelos YOLOv8
-        '--hidden-import=hydra',
-        '--hidden-import=PIL',
-        '--hidden-import=PIL.Image',
-        '--hidden-import=PIL.ImageGrab',  # CRÍTICO para screen_monitor
-        '--hidden-import=PIL.ImageDraw',
-        '--hidden-import=PIL.ImageFont',
-        '--hidden-import=PIL.ImageFilter',
-        '--hidden-import=numpy',
-        '--hidden-import=psutil',
-        '--hidden-import=requests',
         '--hidden-import=websocket',
-        '--hidden-import=websocket._app',
-        '--hidden-import=websocket._core',
-        
-        # Coletar todos os submódulos necessários
+        '--hidden-import=requests',
+        '--hidden-import=psutil',
+        '--hidden-import=pynput',
+        '--hidden-import=mss',
+        # Coletar submodules
         '--collect-all=ultralytics',
         '--collect-all=torch',
-        '--collect-all=torchvision',
-        '--collect-all=omegaconf',  # Coletar omegaconf completo
-        '--collect-submodules=PIL',  # Coletar todos os submódulos do Pillow
-        
+        '--collect-all=cv2',
         # Arquivo principal
         'monitor.py'
     ]
@@ -122,16 +81,21 @@ def build_executable():
         subprocess.check_call(pyinstaller_cmd)
         
         print()
-        print("=" * 60)
-        print("  ✓ Compilação concluída com sucesso!")
-        print("=" * 60)
+        print("=" * 70)
+        print("  Compilação concluída com sucesso!")
+        print("=" * 70)
         print()
-        print("📁 O executável está em: dist/MonitorAluno/")
-        print("📄 Arquivo principal: dist/MonitorAluno/MonitorAluno.exe")
+        print("O executável está em: dist/MonitorAluno.exe")
         print()
-        print("⚠️  IMPORTANTE:")
-        print("   - Distribua a PASTA COMPLETA 'MonitorAluno' (não apenas o .exe)")
-        print("   - O modelo YOLOv8 está incluído na pasta 'face_detection_model'")
+        print("PRÓXIMOS PASSOS:")
+        print("  1. Teste o executável: dist\\MonitorAluno.exe")
+        print("  2. Verifique se todos os recursos funcionam corretamente")
+        print("  3. Distribua o executável para os alunos")
+        print()
+        print("NOTA: O executável inclui:")
+        print("  - Modelo YOLO de detecção facial")
+        print("  - Lista de URLs bloqueadas")
+        print("  - Todas as dependências necessárias")
         print()
         
     except subprocess.CalledProcessError as e:

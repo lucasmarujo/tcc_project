@@ -4,7 +4,9 @@ Detecta URLs abertas no Chrome, Edge e Firefox.
 """
 import logging
 import platform
-from typing import List
+import re
+from typing import List, Tuple
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -26,10 +28,63 @@ except ImportError:
 class BrowserMonitor:
     """Classe para monitorar URLs dos navegadores."""
     
-    def __init__(self):
+    def __init__(self, blocked_urls_file: str = None):
         self.system = platform.system()
+        self.blocked_urls = set()
         
-    def get_browser_urls(self, browser_name: str, pid: int) -> List[str]:
+        # Carregar URLs bloqueadas do arquivo
+        if blocked_urls_file is None:
+            blocked_urls_file = Path(__file__).parent / 'url_bloqueadas.txt'
+        else:
+            blocked_urls_file = Path(blocked_urls_file)
+        
+        self._load_blocked_urls(blocked_urls_file)
+    
+    def _load_blocked_urls(self, file_path: Path):
+        """Carrega lista de URLs bloqueadas do arquivo."""
+        try:
+            if file_path.exists():
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        url = line.strip().lower()
+                        if url and not url.startswith('#'):
+                            self.blocked_urls.add(url)
+                logger.info(f"Carregadas {len(self.blocked_urls)} URLs bloqueadas")
+            else:
+                logger.warning(f"Arquivo de URLs bloqueadas não encontrado: {file_path}")
+        except Exception as e:
+            logger.error(f"Erro ao carregar URLs bloqueadas: {e}")
+    
+    def is_url_blocked(self, url: str) -> Tuple[bool, str]:
+        """
+        Verifica se uma URL está na lista de bloqueadas.
+        
+        Args:
+            url: URL a verificar
+            
+        Returns:
+            Tupla (está_bloqueada, url_bloqueada_encontrada)
+        """
+        if not url:
+            return False, None
+        
+        # Normalizar URL
+        url_lower = url.lower()
+        
+        # Remover protocolo para comparação
+        url_clean = url_lower.replace('https://', '').replace('http://', '').replace('www.', '')
+        
+        # Verificar se alguma URL bloqueada está contida na URL atual
+        for blocked_url in self.blocked_urls:
+            blocked_clean = blocked_url.replace('https://', '').replace('http://', '').replace('www.', '')
+            
+            # Verificar se o domínio bloqueado está na URL
+            if blocked_clean in url_clean or url_clean.startswith(blocked_clean):
+                return True, blocked_url
+        
+        return False, None
+        
+    def get_browser_urls(self, browser_name: str, pid: int) -> List[dict]:
         """
         Obtém URLs abertas em um navegador específico.
         
@@ -38,7 +93,15 @@ class BrowserMonitor:
             pid: PID do processo
             
         Returns:
-            Lista de URLs abertas
+            Lista de dicionários com informações das URLs:
+            [
+                {
+                    'url': str,
+                    'title': str,
+                    'is_blocked': bool,
+                    'blocked_domain': str (se bloqueada)
+                }
+            ]
         """
         urls = []
         
@@ -49,7 +112,7 @@ class BrowserMonitor:
         
         return urls
     
-    def _get_urls_windows(self, browser_name: str, pid: int) -> List[str]:
+    def _get_urls_windows(self, browser_name: str, pid: int) -> List[dict]:
         """Obtém URLs no Windows através dos títulos das janelas."""
         urls = []
         
@@ -65,10 +128,16 @@ class BrowserMonitor:
                         title = win32gui.GetWindowText(hwnd)
                         
                         if title:
-                            # Extrair URL do título (navegadores geralmente mostram URL ou título da página)
-                            url = self._extract_url_from_title(title, browser_name)
-                            if url:
-                                urls.append(url)
+                            # Extrair URL do título
+                            url_info = self._extract_url_from_title(title, browser_name)
+                            if url_info:
+                                # Verificar se a URL está bloqueada
+                                is_blocked, blocked_domain = self.is_url_blocked(url_info['url'])
+                                url_info['is_blocked'] = is_blocked
+                                if is_blocked:
+                                    url_info['blocked_domain'] = blocked_domain
+                                
+                                urls.append(url_info)
             
             # Enumerar todas as janelas
             win32gui.EnumWindows(window_callback, None)
@@ -78,7 +147,7 @@ class BrowserMonitor:
         
         return urls
     
-    def _extract_url_from_title(self, title: str, browser_name: str) -> str:
+    def _extract_url_from_title(self, title: str, browser_name: str) -> dict:
         """
         Extrai URL do título da janela do navegador.
         
@@ -87,12 +156,17 @@ class BrowserMonitor:
             browser_name: Nome do navegador
             
         Returns:
-            URL extraída ou título da página
+            Dicionário com informações: {'url': str, 'title': str, 'has_explicit_url': bool}
+            ou None se não conseguir extrair
         """
         try:
             # Validar título
             if not title or title.strip() == '':
-                return ''
+                return None
+            
+            original_title = title
+            has_explicit_url = False
+            extracted_url = None
             
             # Remover sufixos comuns dos navegadores
             suffixes = [
@@ -106,57 +180,101 @@ class BrowserMonitor:
                 if title.endswith(suffix):
                     title = title[:-len(suffix)].strip()
             
-            # Se contém http/https, é uma URL
+            # Se contém http/https explicitamente, é uma URL
             if 'http://' in title or 'https://' in title:
-                # Tentar extrair a URL
-                parts = title.split()
-                for part in parts:
-                    if part.startswith('http://') or part.startswith('https://'):
-                        return part
+                has_explicit_url = True
+                # Tentar extrair a URL usando regex
+                url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
+                matches = re.findall(url_pattern, title)
+                if matches:
+                    extracted_url = matches[0]
+                else:
+                    # Fallback: tentar por split
+                    parts = title.split()
+                    for part in parts:
+                        if part.startswith('http://') or part.startswith('https://'):
+                            extracted_url = part
+                            break
             
-            # Tentar construir URL básica a partir do título
-            # (navegadores modernos nem sempre mostram a URL completa no título)
-            # Neste caso, usamos técnicas alternativas
+            # Se não encontrou URL explícita, tentar inferir do título
+            if not extracted_url:
+                extracted_url = self._infer_url_from_title(title, browser_name)
             
-            return self._guess_url_from_accessibility_api(title, browser_name)
+            if not extracted_url:
+                return None
+            
+            return {
+                'url': extracted_url,
+                'title': title,
+                'original_title': original_title,
+                'has_explicit_url': has_explicit_url
+            }
         
         except Exception as e:
             logger.debug(f"Erro ao extrair URL do título: {e}")
-            return ''
+            return None
     
-    def _guess_url_from_accessibility_api(self, title: str, browser_name: str) -> str:
+    def _infer_url_from_title(self, title: str, browser_name: str) -> str:
         """
-        Tenta obter URL usando APIs de acessibilidade (implementação básica).
+        Tenta inferir URL a partir do título da janela.
         
-        Em produção, seria necessário usar bibliotecas mais específicas como:
-        - Para Chrome: chrome-remote-interface ou selenium
-        - Para Firefox: marionette
-        - Para Edge: WebDriver
-        
-        Por enquanto, retornamos o título como indicador.
+        Args:
+            title: Título da janela
+            browser_name: Nome do navegador
+            
+        Returns:
+            URL inferida ou título limpo
         """
         try:
-            # Esta é uma implementação simplificada
-            # Em um sistema real, você usaria APIs específicas de cada navegador
-            # ou extensões para capturar a URL real da barra de endereços
-            
-            # Validar se o título não está vazio ou é válido
+            # Validar se o título não está vazio
             if not title or title.strip() == '':
-                return ''
+                return None
             
             # Filtrar títulos que são claramente erros ou não relevantes
-            error_indicators = ['erro', 'error', 'exception', 'traceback', 'módulo', 'module']
+            error_indicators = ['erro', 'error', 'exception', 'traceback', 'módulo', 'module', 'python']
             title_lower = title.lower()
             
             if any(indicator in title_lower for indicator in error_indicators):
                 logger.debug(f"Título filtrado como não relevante: {title}")
-                return ''
+                return None
             
+            # Tentar extrair domínios comuns do título
+            # Ex: "Facebook - Google Chrome" -> "facebook.com"
+            common_sites = {
+                'google': 'google.com',
+                'facebook': 'facebook.com',
+                'youtube': 'youtube.com',
+                'twitter': 'twitter.com',
+                'instagram': 'instagram.com',
+                'linkedin': 'linkedin.com',
+                'github': 'github.com',
+                'stackoverflow': 'stackoverflow.com',
+                'reddit': 'reddit.com',
+                'wikipedia': 'wikipedia.org',
+                'amazon': 'amazon.com',
+                'netflix': 'netflix.com',
+                'whatsapp': 'web.whatsapp.com',
+                'gmail': 'mail.google.com',
+                'outlook': 'outlook.com',
+                'chatgpt': 'chat.openai.com',
+                'claude': 'claude.ai',
+                'gemini': 'gemini.google.com',
+                'bard': 'bard.google.com',
+                'copilot': 'copilot.microsoft.com',
+                'bing': 'bing.com',
+            }
+            
+            for site_keyword, site_url in common_sites.items():
+                if site_keyword in title_lower:
+                    return f"https://{site_url}"
+            
+            # Se não encontrou nada específico, retornar o título como indicador
+            # O título será usado no monitoramento mesmo que não seja uma URL completa
             return title.strip()
         
         except Exception as e:
-            logger.debug(f"Erro ao processar título: {e}")
-            return ''
+            logger.debug(f"Erro ao inferir URL do título: {e}")
+            return None
 
 
 class BrowserURLExtractor:
