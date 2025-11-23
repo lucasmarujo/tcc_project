@@ -34,19 +34,23 @@ class WebcamMonitor:
         self.thread = None
         
         # Configurações
-        self.fps_target = 15  # FPS para envio (não captura - captura é nativa da câmera)
+        self.fps_target = 30  # FPS para envio - aumentado para 30 FPS
         self.frame_width = 640  # Largura do frame redimensionado
         self.frame_height = 360  # Altura do frame redimensionado
-        self.jpeg_quality = 65  # Qualidade JPEG (0-100)
+        self.jpeg_quality = 50  # Qualidade JPEG reduzida para compensar mais FPS
         
         # Resolução menor para detecção YOLO (mais rápido)
-        self.detection_width = 320  # Muito menor para YOLO
-        self.detection_height = 180
+        self.detection_width = 256  # Ainda menor para YOLO - mais performance
+        self.detection_height = 144
         
         # Detectar apenas a cada N frames (economiza MUITO processamento)
-        self.detect_every_n_frames = 3  # Detectar 1 a cada 3 frames
+        self.detect_every_n_frames = 6  # Detectar 1 a cada 6 frames (com 30 FPS = 5 detecções/seg)
         self.frames_since_detection = 0
         self.last_detections = []  # Cache das últimas detecções
+        
+        # Rastrear se há face detectada
+        self.no_face_frames = 0  # Contador de frames sem detecção de face
+        self.alert_threshold = 60  # Alertar após 60 frames sem face (2 segundos a 30 FPS)
         
         # Estatísticas
         self.frames_captured = 0
@@ -164,7 +168,7 @@ class WebcamMonitor:
                                                 interpolation=cv2.INTER_LINEAR)
                     
                     # Executar detecção YOLO
-                    results = self.model(frame_detection, verbose=False, imgsz=320)
+                    results = self.model(frame_detection, verbose=False, imgsz=256)
                     
                     # Calcular escala para mapear coordenadas de volta para frame de exibição
                     scale_x = self.frame_width / self.detection_width
@@ -185,13 +189,20 @@ class WebcamMonitor:
                             x2 = x2 * scale_x
                             y2 = y2 * scale_y
                             
-                            # Obter nome da classe
-                            class_name = self.model.names[class_id] if class_id in self.model.names else f"class_{class_id}"
+                            # Obter nome da classe REAL do modelo
+                            class_name_original = self.model.names[class_id] if class_id in self.model.names else f"class_{class_id}"
                             
+                            # Log para debug - mostrar o que o modelo retornou
+                            if self.frames_captured <= 20:
+                                logger.info(f"MODELO RETORNOU: classe_original='{class_name_original}' (ID={class_id}), confiança={confidence:.2f}")
+                            
+                            # SIMPLIFICADO: Se detectou qualquer coisa, considera como "face_detectada"
+                            # O modelo yolov8m_200e.pt detecta faces, então qualquer detecção = face OK
                             detections.append({
-                                'class': class_name,
+                                'class': 'face_detectada',  # Sempre face detectada
                                 'confidence': confidence,
-                                'bbox': [float(x1), float(y1), float(x2), float(y2)]
+                                'bbox': [float(x1), float(y1), float(x2), float(y2)],
+                                'original_class': class_name_original  # Manter classe original para debug
                             })
                     
                     # Salvar detecções para usar nos próximos frames
@@ -200,20 +211,29 @@ class WebcamMonitor:
                     # Usar detecções do frame anterior
                     detections = self.last_detections
                 
+                # Verificar se há face detectada
+                # SIMPLES: Se tem detecções = tem face, se não tem = sem face
+                has_face = len(detections) > 0
+                if not has_face:
+                    self.no_face_frames += 1
+                else:
+                    self.no_face_frames = 0
+                
                 # Desenhar bounding boxes no frame
                 annotated_frame = frame_display.copy()
                 for det in detections:
                     x1, y1, x2, y2 = det['bbox']
-                    class_name = det['class']
                     confidence = det['confidence']
                     
-                    # Desenhar bounding box
-                    color = (0, 255, 0) if class_name == 'permitido' else (0, 0, 255)
+                    # SEMPRE VERDE - face detectada
+                    color = (0, 255, 0)  # VERDE
                     thickness = 3 if confidence > 0.7 else 2
+                    label = f"Face: {confidence:.2f}"
+                    
+                    # Desenhar retângulo verde ao redor da face
                     cv2.rectangle(annotated_frame, (int(x1), int(y1)), (int(x2), int(y2)), color, thickness)
                     
-                    # Adicionar label
-                    label = f"{class_name}: {confidence:.2f}"
+                    # Adicionar label com fundo verde
                     label_size, _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
                     cv2.rectangle(annotated_frame, (int(x1), int(y1) - label_size[1] - 10), 
                                 (int(x1) + label_size[0], int(y1)), color, -1)
@@ -234,7 +254,9 @@ class WebcamMonitor:
                     'timestamp': current_time,
                     'frame_number': self.frames_captured,
                     'width': self.frame_width,
-                    'height': self.frame_height
+                    'height': self.frame_height,
+                    'has_face': has_face,
+                    'no_face_duration': self.no_face_frames / self.fps_target  # Duração em segundos
                 }
                 
                 # Enviar via callback

@@ -391,15 +391,7 @@ class StudentMonitor:
             if frame_data.get('detections'):
                 detections = frame_data['detections']
                 if len(detections) > 0:
-                    for det in detections:
-                        class_name = det['class']
-                        confidence = det['confidence']
-                        
-                        # Log diferentes dependendo da classe
-                        if class_name == 'nao_permitido':
-                            logger.warning(f"ALERTA: Situação não permitida detectada! (confiança: {confidence:.2f})")
-                        else:
-                            logger.debug(f"Detecção: {class_name} (confiança: {confidence:.2f})")
+                    logger.debug(f"Face detectada - {len(detections)} detecção(ões)")
         
         except Exception as e:
             logger.error(f"Erro ao processar frame da webcam: {e}", exc_info=True)

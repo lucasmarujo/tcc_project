@@ -4,6 +4,9 @@ WebSocket consumers for real-time monitoring.
 import json
 import logging
 from channels.generic.websocket import AsyncWebsocketConsumer
+from channels.db import database_sync_to_async
+from django.utils import timezone
+from datetime import timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +76,10 @@ class WebcamConsumer(AsyncWebsocketConsumer):
         # Nome do grupo para este aluno específico
         self.room_group_name = f'webcam_{self.registration_number}'
         
+        # Controle de alertas de face não detectada
+        self.last_no_face_alert = None
+        self.alert_cooldown = 30  # Segundos entre alertas
+        
         # Join room group
         await self.channel_layer.group_add(
             self.room_group_name,
@@ -109,7 +116,9 @@ class WebcamConsumer(AsyncWebsocketConsumer):
                 'timestamp': ...,
                 'frame_number': ...,
                 'width': ...,
-                'height': ...
+                'height': ...,
+                'has_face': bool,
+                'no_face_duration': float
             }
         }
         """
@@ -127,19 +136,80 @@ class WebcamConsumer(AsyncWebsocketConsumer):
                     }
                 )
                 
-                # Log de detecções importantes
-                detections = message.get('data', {}).get('detections', [])
-                for det in detections:
-                    if det.get('class') == 'nao_permitido':
+                frame_data = message.get('data', {})
+                detections = frame_data.get('detections', [])
+                has_face = frame_data.get('has_face', False)
+                no_face_duration = frame_data.get('no_face_duration', 0)
+                
+                # Verificar se há face detectada
+                # SIMPLES: Se não detectou nada por 2+ segundos = alerta
+                if not has_face and no_face_duration >= 2.0:
+                    # Criar alerta se passou o cooldown
+                    now = timezone.now()
+                    should_alert = True
+                    
+                    if self.last_no_face_alert:
+                        elapsed = (now - self.last_no_face_alert).total_seconds()
+                        if elapsed < self.alert_cooldown:
+                            should_alert = False
+                    
+                    if should_alert:
+                        await self._create_no_face_alert(
+                            message.get('registration_number'),
+                            message.get('student_name', 'Desconhecido'),
+                            no_face_duration
+                        )
+                        self.last_no_face_alert = now
                         logger.warning(
-                            f"ALERTA: Situação não permitida detectada para aluno {self.registration_number} "
-                            f"(confiança: {det.get('confidence', 0):.2f})"
+                            f"ALERTA: Face não detectada para aluno {self.registration_number} "
+                            f"por {no_face_duration:.1f} segundos"
                         )
             
         except json.JSONDecodeError as e:
             logger.error(f"Erro ao decodificar JSON: {e}")
         except Exception as e:
             logger.error(f"Erro ao processar mensagem da webcam: {e}", exc_info=True)
+    
+    @database_sync_to_async
+    def _create_no_face_alert(self, registration_number, student_name, duration):
+        """Cria alerta de face não detectada no banco de dados."""
+        try:
+            from students.models import Student
+            from monitoring.models import Alert, MonitoringEvent
+            
+            # Buscar aluno
+            student = Student.objects.filter(registration_number=registration_number).first()
+            if not student:
+                logger.error(f"Aluno não encontrado: {registration_number}")
+                return
+            
+            # Criar evento de monitoramento
+            event = MonitoringEvent.objects.create(
+                student=student,
+                event_type='other',
+                description=f"Face não detectada por {duration:.1f} segundos",
+                additional_data={
+                    'type': 'no_face_detected',
+                    'duration': duration,
+                    'student_name': student_name
+                }
+            )
+            
+            # Criar alerta
+            Alert.objects.create(
+                event=event,
+                student=student,
+                severity='high',
+                title='Face não detectada',
+                description=f'O rosto do aluno {student_name} não foi detectado pela webcam por {duration:.1f} segundos.',
+                reason='A face do aluno deve estar sempre visível durante o monitoramento'
+            )
+            
+            logger.info(f"Alerta de face não detectada criado para {student_name}")
+            
+        except Exception as e:
+            logger.error(f"Erro ao criar alerta de face não detectada: {e}", exc_info=True)
+    
 
 
 class WebcamViewerConsumer(AsyncWebsocketConsumer):

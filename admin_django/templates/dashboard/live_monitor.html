@@ -336,7 +336,7 @@
         
         // Atualizar informações de detecção
         const detectionElement = document.getElementById(`detection-${registrationNumber}`);
-        if (detectionElement && frameData.detections) {
+        if (detectionElement && frameData.detections !== undefined) {
             updateDetectionInfo(registrationNumber, frameData.detections);
         }
         
@@ -368,21 +368,22 @@
         const detectionElement = document.getElementById(`detection-${registrationNumber}`);
         if (!detectionElement) return;
         
-        if (detections.length === 0) {
-            detectionElement.innerHTML = '';
+        // Se não tem detecções = sem face (AMARELO)
+        if (!detections || detections.length === 0) {
+            detectionElement.innerHTML = '<div class="detection-badges"><span class="badge bg-warning m-1"><i class="bi bi-exclamation-triangle"></i> Nenhuma face detectada</span></div>';
             return;
         }
         
+        // Se tem detecções = face detectada (VERDE)
         let html = '<div class="detection-badges">';
         
         for (const det of detections) {
-            const className = det.class;
             const confidence = (det.confidence * 100).toFixed(1);
-            const badgeClass = className === 'permitido' ? 'bg-success' : 'bg-danger';
             
-            html += `<span class="badge ${badgeClass} m-1">`;
-            html += `<i class="bi bi-${className === 'permitido' ? 'check-circle' : 'x-circle'}"></i> `;
-            html += `${className}: ${confidence}%`;
+            // SEMPRE VERDE - face detectada
+            html += `<span class="badge bg-success m-1">`;
+            html += `<i class="bi bi-check-circle-fill"></i> `;
+            html += `Face do Aluno Detectada: ${confidence}%`;
             html += `</span>`;
         }
         
