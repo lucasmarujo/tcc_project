@@ -1,0 +1,20 @@
+# Screenshots
+screenshots_*/
+
+# Logs
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# Credenciais
+.env
+config_credentials.py
+

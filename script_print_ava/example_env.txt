@@ -1,0 +1,6 @@
+# Exemplo de arquivo .env para credenciais
+# Copie este arquivo para .env e preencha com suas credenciais
+
+AVA_USERNAME=2108723
+AVA_PASSWORD=BLABLABLA
+
