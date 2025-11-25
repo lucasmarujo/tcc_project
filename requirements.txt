@@ -33,6 +33,7 @@ seaborn==0.13.2
 # --- Processamento de Imagem ---
 opencv-python==4.10.0.84
 Pillow==10.1.0  # unificado (não repita com "pillow")
+mss==9.0.1  # Captura de tela rápida (muito mais rápido que PIL ImageGrab)
 
 # --- Utilidades ---
 numpy==1.26.4

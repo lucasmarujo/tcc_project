@@ -1,6 +1,7 @@
 """
 Monitor de webcam com detecção facial usando YOLO.
 Captura frames da webcam, executa detecção com YOLO e envia para o servidor.
+Otimizado para 30 FPS fluidos com uso máximo de CPU/GPU.
 """
 import cv2
 import logging
@@ -11,6 +12,9 @@ import numpy as np
 from pathlib import Path
 from typing import Optional, Callable
 from ultralytics import YOLO
+
+# Configurar OpenCV para usar todos os cores da CPU
+cv2.setNumThreads(0)  # 0 = usar todos os cores disponíveis
 
 logger = logging.getLogger(__name__)
 
@@ -33,18 +37,18 @@ class WebcamMonitor:
         self.model = None
         self.thread = None
         
-        # Configurações
-        self.fps_target = 30  # FPS para envio - aumentado para 30 FPS
+        # Configurações otimizadas para 30 FPS fluidos
+        self.fps_target = 30  # 30 FPS cravados
         self.frame_width = 640  # Largura do frame redimensionado
         self.frame_height = 360  # Altura do frame redimensionado
-        self.jpeg_quality = 50  # Qualidade JPEG reduzida para compensar mais FPS
+        self.jpeg_quality = 50  # Qualidade JPEG otimizada para streaming
         
         # Resolução menor para detecção YOLO (mais rápido)
-        self.detection_width = 256  # Ainda menor para YOLO - mais performance
-        self.detection_height = 144
+        self.detection_width = 224  # Resolução otimizada para YOLO
+        self.detection_height = 126
         
         # Detectar apenas a cada N frames (economiza MUITO processamento)
-        self.detect_every_n_frames = 6  # Detectar 1 a cada 6 frames (com 30 FPS = 5 detecções/seg)
+        self.detect_every_n_frames = 10  # Detectar 1 a cada 10 frames (3 detecções/seg a 30 FPS)
         self.frames_since_detection = 0
         self.last_detections = []  # Cache das últimas detecções
         
@@ -73,20 +77,42 @@ class WebcamMonitor:
                 return False
             
             logger.info(f"Carregando modelo YOLO: {self.model_path}")
+            
+            # Verificar e usar GPU se disponível
+            device = 'cpu'
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    device = 'cuda'
+                    logger.info("GPU CUDA detectada - usando para inferência YOLO na webcam")
+                else:
+                    logger.info("GPU não disponível, usando CPU otimizada para webcam")
+            except Exception as e:
+                logger.info(f"PyTorch/GPU não disponível: {e}")
+            
+            # Carregar modelo com configurações otimizadas
             self.model = YOLO(str(self.model_path))
-            logger.info("Modelo YOLO carregado com sucesso")
+            if device == 'cuda':
+                self.model.to('cuda')
+            
+            # Configurar para inferência rápida
+            self.model.overrides['verbose'] = False
+            
+            logger.info(f"Modelo YOLO carregado com sucesso no device: {device}")
             
             # Inicializar webcam
             logger.info("Inicializando webcam...")
-            self.capture = cv2.VideoCapture(0)
+            self.capture = cv2.VideoCapture(0, cv2.CAP_DSHOW)  # DirectShow no Windows é mais rápido
             
             if not self.capture.isOpened():
                 logger.error("Não foi possível abrir a webcam")
                 return False
             
-            # Configurar resolução da webcam
+            # Configurar resolução e FPS da webcam
             self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.frame_width)
             self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.frame_height)
+            self.capture.set(cv2.CAP_PROP_FPS, 30)  # Forçar 30 FPS na webcam
+            self.capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Buffer mínimo para menor latência
             
             # Testar captura
             ret, frame = self.capture.read()
@@ -112,9 +138,20 @@ class WebcamMonitor:
             return
         
         self.running = True
-        self.thread = threading.Thread(target=self._capture_loop, daemon=True)
+        self.thread = threading.Thread(target=self._capture_loop, daemon=True, name="WebcamCapture")
         self.thread.start()
-        logger.info("Webcam monitor iniciado")
+        
+        # Tentar aumentar prioridade da thread (Windows)
+        try:
+            import psutil
+            import os
+            p = psutil.Process(os.getpid())
+            p.nice(psutil.HIGH_PRIORITY_CLASS if hasattr(psutil, 'HIGH_PRIORITY_CLASS') else -10)
+            logger.info("Prioridade do processo aumentada para melhor performance")
+        except Exception as e:
+            logger.debug(f"Não foi possível aumentar prioridade: {e}")
+        
+        logger.info("Webcam monitor iniciado com otimizações de performance")
     
     def stop(self):
         """Para o monitoramento."""
@@ -130,16 +167,24 @@ class WebcamMonitor:
         logger.info(f"Webcam monitor parado. Frames capturados: {self.frames_captured}, enviados: {self.frames_sent}")
     
     def _capture_loop(self):
-        """Loop principal de captura e processamento."""
+        """Loop principal de captura e processamento - otimizado para 30 FPS fluidos."""
         frame_interval = 1.0 / self.fps_target
+        next_frame_time = time.time()
         
         while self.running:
             try:
-                # Verificar se já passou tempo suficiente desde o último frame
+                # Controle de timing preciso baseado em next_frame_time
                 current_time = time.time()
-                if current_time - self.last_frame_time < frame_interval:
-                    time.sleep(0.005)  # Sleep menor para melhor timing
+                
+                if current_time < next_frame_time:
+                    # Sleep apenas o tempo necessário para o próximo frame
+                    sleep_time = next_frame_time - current_time
+                    if sleep_time > 0.001:
+                        time.sleep(sleep_time)
                     continue
+                
+                # Atualizar próximo frame time (timing preciso)
+                next_frame_time = current_time + frame_interval
                 
                 # Capturar frame
                 ret, frame = self.capture.read()
@@ -151,24 +196,24 @@ class WebcamMonitor:
                 self.frames_captured += 1
                 self.frames_since_detection += 1
                 
-                # Redimensionar para tamanho de exibição
+                # Redimensionar para tamanho de exibição (INTER_NEAREST é mais rápido)
                 if frame.shape[1] != self.frame_width or frame.shape[0] != self.frame_height:
                     frame_display = cv2.resize(frame, (self.frame_width, self.frame_height), 
-                                              interpolation=cv2.INTER_LINEAR)
+                                              interpolation=cv2.INTER_NEAREST)
                 else:
-                    frame_display = frame.copy()
+                    frame_display = frame
                 
                 # Executar detecção YOLO apenas a cada N frames (OTIMIZAÇÃO CRÍTICA!)
                 detections = []
                 if self.frames_since_detection >= self.detect_every_n_frames:
                     self.frames_since_detection = 0
                     
-                    # Redimensionar para tamanho de detecção (MUITO menor = MUITO mais rápido)
+                    # Redimensionar para tamanho de detecção (INTER_NEAREST para velocidade máxima)
                     frame_detection = cv2.resize(frame, (self.detection_width, self.detection_height),
-                                                interpolation=cv2.INTER_LINEAR)
+                                                interpolation=cv2.INTER_NEAREST)
                     
-                    # Executar detecção YOLO
-                    results = self.model(frame_detection, verbose=False, imgsz=256)
+                    # Executar detecção YOLO (com half=True se GPU disponível para mais velocidade)
+                    results = self.model(frame_detection, verbose=False, imgsz=224, half=False)
                     
                     # Calcular escala para mapear coordenadas de volta para frame de exibição
                     scale_x = self.frame_width / self.detection_width
@@ -219,8 +264,8 @@ class WebcamMonitor:
                 else:
                     self.no_face_frames = 0
                 
-                # Desenhar bounding boxes no frame
-                annotated_frame = frame_display.copy()
+                # Desenhar bounding boxes no frame (usar view ao invés de copy se possível)
+                annotated_frame = frame_display
                 for det in detections:
                     x1, y1, x2, y2 = det['bbox']
                     confidence = det['confidence']
@@ -240,8 +285,12 @@ class WebcamMonitor:
                     cv2.putText(annotated_frame, label, (int(x1), int(y1) - 5),
                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
                 
-                # Codificar frame anotado em JPEG
-                encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), self.jpeg_quality]
+                # Codificar frame anotado em JPEG (otimizado para velocidade)
+                encode_param = [
+                    int(cv2.IMWRITE_JPEG_QUALITY), self.jpeg_quality,
+                    int(cv2.IMWRITE_JPEG_OPTIMIZE), 0,  # Desabilitar otimização para velocidade
+                    int(cv2.IMWRITE_JPEG_PROGRESSIVE), 0  # Desabilitar progressive
+                ]
                 _, buffer = cv2.imencode('.jpg', annotated_frame, encode_param)
                 
                 # Converter para base64
@@ -268,7 +317,7 @@ class WebcamMonitor:
                     except Exception as e:
                         logger.error(f"Erro ao enviar frame via callback: {e}")
                 
-                self.last_frame_time = current_time
+                self.last_frame_time = time.time()
                 
                 # Log de estatísticas a cada 5 segundos
                 if current_time - self.last_stats_time >= 5.0:

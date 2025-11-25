@@ -1,6 +1,7 @@
 """
 Monitor de tela para captura e transmissão da tela do aluno.
 Captura screenshots da tela, redimensiona e envia para o servidor.
+Otimizado para 30 FPS fluidos com uso máximo de CPU/GPU.
 """
 import logging
 import threading
@@ -11,6 +12,10 @@ from io import BytesIO
 from typing import Optional, Callable
 from PIL import Image
 from ultralytics import YOLO
+import cv2
+
+# Configurar OpenCV para usar todos os cores da CPU
+cv2.setNumThreads(0)  # 0 = usar todos os cores disponíveis
 
 # Tentar importar MSS (mais rápido que PIL ImageGrab)
 try:
@@ -42,29 +47,24 @@ class ScreenMonitor:
         self.model = None
         self.model_path = model_path
         
-        # Configurações otimizadas para screen sharing
-        self.fps_target = 10  # FPS aumentado de 5 para 10
-        self.frame_width = 960  # Largura do frame (resolução média)
-        self.frame_height = 540  # Altura do frame (540p)
-        self.jpeg_quality = 60  # Qualidade JPEG otimizada
+        # Configurações otimizadas para screen sharing - 30 FPS
+        self.fps_target = 30  # 30 FPS para streaming fluido
+        self.frame_width = 640  # Largura reduzida para melhor performance
+        self.frame_height = 360  # Altura reduzida (360p)
+        self.jpeg_quality = 50  # Qualidade JPEG otimizada para streaming
         
         # Configurações de detecção YOLO (se habilitado)
-        self.detection_width = 640  # Resolução para detecção YOLO
-        self.detection_height = 360
-        self.detect_every_n_frames = 5  # Detectar apenas a cada 5 frames (economizar processamento)
+        self.detection_width = 320  # Resolução menor para detecção YOLO
+        self.detection_height = 180
+        self.detect_every_n_frames = 15  # Detectar apenas a cada 15 frames (2x por segundo a 30 FPS)
         self.frames_since_detection = 0
         self.last_detections = []
         
-        # MSS (mais rápido que PIL)
+        # MSS (mais rápido que PIL) - será inicializado na thread
         self.use_mss = MSS_AVAILABLE
         self.sct = None
         if self.use_mss:
-            try:
-                self.sct = mss.mss()
-                logger.info("Usando MSS para captura de tela (mais rápido)")
-            except Exception as e:
-                logger.warning(f"Erro ao inicializar MSS: {e}. Usando PIL ImageGrab")
-                self.use_mss = False
+            logger.info("MSS disponível - será usado para captura de tela (mais rápido)")
         else:
             logger.info("MSS não disponível, usando PIL ImageGrab")
         
@@ -101,18 +101,26 @@ class ScreenMonitor:
                     return True
             
             logger.info(f"Carregando modelo YOLO para screen: {self.model_path}")
-            self.model = YOLO(str(self.model_path))
             
             # Tentar usar GPU se disponível
+            device = 'cpu'
             try:
                 import torch
                 if torch.cuda.is_available():
-                    self.model.to('cuda')
-                    logger.info("Modelo YOLO usando GPU")
+                    device = 'cuda'
+                    logger.info("GPU CUDA detectada - usando para inferência YOLO")
                 else:
-                    logger.info("GPU não disponível, usando CPU")
+                    logger.info("GPU não disponível, usando CPU otimizada")
             except Exception as e:
-                logger.info(f"GPU não disponível: {e}")
+                logger.info(f"PyTorch/GPU não disponível: {e}")
+            
+            # Carregar modelo já no device correto com configurações otimizadas
+            self.model = YOLO(str(self.model_path))
+            if device == 'cuda':
+                self.model.to('cuda')
+            
+            # Configurar para inferência rápida
+            self.model.overrides['verbose'] = False
             
             logger.info("Modelo YOLO carregado com sucesso para screen monitor")
             return True
@@ -135,9 +143,20 @@ class ScreenMonitor:
             self._initialize_model()
         
         self.running = True
-        self.thread = threading.Thread(target=self._capture_loop, daemon=True)
+        self.thread = threading.Thread(target=self._capture_loop, daemon=True, name="ScreenCapture")
         self.thread.start()
-        logger.info("Screen monitor iniciado")
+        
+        # Tentar aumentar prioridade da thread (Windows)
+        try:
+            import psutil
+            import os
+            p = psutil.Process(os.getpid())
+            p.nice(psutil.HIGH_PRIORITY_CLASS if hasattr(psutil, 'HIGH_PRIORITY_CLASS') else -10)
+            logger.info("Prioridade do processo aumentada para melhor performance")
+        except Exception as e:
+            logger.debug(f"Não foi possível aumentar prioridade: {e}")
+        
+        logger.info("Screen monitor iniciado com otimizações de performance")
     
     def stop(self):
         """Para o monitoramento."""
@@ -147,30 +166,38 @@ class ScreenMonitor:
         if self.thread:
             self.thread.join(timeout=5)
         
-        # Fechar MSS se estiver em uso
-        if self.sct:
-            try:
-                self.sct.close()
-            except Exception as e:
-                logger.debug(f"Erro ao fechar MSS: {e}")
-        
         logger.info(f"Screen monitor parado. Frames capturados: {self.frames_captured}, enviados: {self.frames_sent}")
     
     def _capture_loop(self):
-        """Loop principal de captura da tela - otimizado para streaming fluido."""
+        """Loop principal de captura da tela - otimizado para 30 FPS fluidos."""
+        # Inicializar MSS dentro da thread (necessário para Windows)
+        if self.use_mss and self.sct is None:
+            try:
+                import mss
+                self.sct = mss.mss()
+                logger.info("MSS inicializado na thread de captura")
+            except Exception as e:
+                logger.warning(f"Erro ao inicializar MSS na thread: {e}. Usando PIL ImageGrab")
+                self.use_mss = False
+                self.sct = None
+        
         frame_interval = 1.0 / self.fps_target
         next_frame_time = time.time()
         
         while self.running:
             try:
-                # Controle de timing mais preciso
+                # Controle de timing preciso baseado em next_frame_time
                 current_time = time.time()
-                time_since_last = current_time - self.last_frame_time
                 
-                if time_since_last < frame_interval:
-                    # Sleep apenas o tempo necessário (mais preciso)
-                    time.sleep(max(0.001, frame_interval - time_since_last))
+                if current_time < next_frame_time:
+                    # Sleep apenas o tempo necessário para o próximo frame
+                    sleep_time = next_frame_time - current_time
+                    if sleep_time > 0.001:
+                        time.sleep(sleep_time)
                     continue
+                
+                # Atualizar próximo frame time (timing preciso)
+                next_frame_time = current_time + frame_interval
                 
                 # Capturar screenshot da tela (MSS ou PIL)
                 if self.use_mss and self.sct:
@@ -207,8 +234,8 @@ class ScreenMonitor:
                     new_height = self.frame_height
                     new_width = int(self.frame_height * aspect_ratio)
                 
-                # Redimensionar usando PIL com método mais rápido
-                img_resized = screenshot.resize((new_width, new_height), Image.BILINEAR)  # BILINEAR é mais rápido
+                # Redimensionar usando PIL com método mais rápido (NEAREST é o mais rápido)
+                img_resized = screenshot.resize((new_width, new_height), Image.NEAREST)  # NEAREST é o mais rápido para streaming
                 
                 # Executar detecção YOLO a cada N frames (se habilitado)
                 detections = []
@@ -216,8 +243,8 @@ class ScreenMonitor:
                     self.frames_since_detection = 0
                     
                     try:
-                        # Redimensionar para resolução de detecção
-                        img_detection = screenshot.resize((self.detection_width, self.detection_height), Image.BILINEAR)
+                        # Redimensionar para resolução de detecção (NEAREST para velocidade máxima)
+                        img_detection = screenshot.resize((self.detection_width, self.detection_height), Image.NEAREST)
                         
                         # Converter para numpy array
                         img_array = np.array(img_detection)
@@ -266,9 +293,9 @@ class ScreenMonitor:
                     # Usar detecções anteriores
                     detections = self.last_detections
                 
-                # Converter para JPEG em memória (sem optimize para velocidade)
+                # Converter para JPEG em memória (otimizado para velocidade máxima)
                 buffer = BytesIO()
-                img_resized.save(buffer, format='JPEG', quality=self.jpeg_quality, optimize=False, progressive=True)
+                img_resized.save(buffer, format='JPEG', quality=self.jpeg_quality, optimize=False, progressive=False, subsampling=2)
                 jpeg_data = buffer.getvalue()
                 
                 # Converter para base64
@@ -295,7 +322,7 @@ class ScreenMonitor:
                     except Exception as e:
                         logger.error(f"Erro ao enviar frame via callback: {e}")
                 
-                self.last_frame_time = current_time
+                self.last_frame_time = time.time()
                 
                 # Log de estatísticas a cada 10 segundos
                 if current_time - self.last_stats_time >= 10.0:
@@ -309,6 +336,14 @@ class ScreenMonitor:
             except Exception as e:
                 logger.error(f"Erro no loop de captura de tela: {e}", exc_info=True)
                 time.sleep(0.5)
+        
+        # Fechar MSS ao sair do loop
+        if self.sct:
+            try:
+                self.sct.close()
+                logger.debug("MSS fechado corretamente")
+            except Exception as e:
+                logger.debug(f"Erro ao fechar MSS: {e}")
     
     def get_stats(self) -> dict:
         """
