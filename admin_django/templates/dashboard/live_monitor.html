@@ -17,7 +17,7 @@
     
     <div id="webcam-grid" class="row g-3">
         {% for item in students_status %}
-        <div class="col-lg-6 col-md-12 col-sm-12">
+        <div class="col-12"> <!-- Expandido para full width para acomodar o layout lado a lado -->
             <div class="card webcam-card shadow-sm">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <div>
@@ -30,67 +30,140 @@
                     </span>
                 </div>
                 
-                <!-- Webcam Section -->
-                <div class="stream-section webcam-section">
-                    <div class="stream-label">
-                        <i class="bi bi-camera-video"></i> Webcam
-                    </div>
-                    <div class="card-body p-0 bg-dark position-relative">
-                        <img 
-                            id="webcam-{{ item.registration_number }}" 
-                            class="webcam-feed" 
-                            src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='360'%3E%3Crect width='640' height='360' fill='%23333'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23fff' font-size='16'%3EAguardando webcam...%3C/text%3E%3C/svg%3E"
-                            alt="Webcam {{ item.name }}"
-                            loading="eager"
-                            decoding="async"
-                        >
-                        <div class="webcam-overlay">
-                            <small class="text-white">
-                                <i class="bi bi-pc-display"></i> {{ item.machine_name|default:"-" }}
-                            </small>
+                <div class="row g-0">
+                    <!-- Coluna da Esquerda: Streams (Webcam + Tela) -->
+                    <div class="col-lg-8 col-md-12 border-end stream-column">
+                        <div class="row g-0">
+                            <div class="col-md-6 border-end">
+                                <!-- Webcam Section -->
+                                <div class="stream-section webcam-section h-100">
+                                    <div class="stream-label">
+                                        <i class="bi bi-camera-video"></i> Webcam
+                                    </div>
+                                    <div class="card-body p-0 bg-dark position-relative">
+                                        <img 
+                                            id="webcam-{{ item.registration_number }}" 
+                                            class="webcam-feed" 
+                                            src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='360'%3E%3Crect width='640' height='360' fill='%23333'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23fff' font-size='16'%3EAguardando webcam...%3C/text%3E%3C/svg%3E"
+                                            alt="Webcam {{ item.name }}"
+                                            loading="eager"
+                                            decoding="async"
+                                        >
+                                        <div class="webcam-overlay">
+                                            <small class="text-white">
+                                                <i class="bi bi-pc-display"></i> {{ item.machine_name|default:"-" }}
+                                            </small>
+                                        </div>
+                                        <button class="btn btn-sm btn-light fullscreen-btn" onclick="toggleFullscreen('webcam-{{ item.registration_number }}')" title="Tela cheia">
+                                            <i class="bi bi-fullscreen"></i>
+                                        </button>
+                                        <div class="detection-info" id="detection-{{ item.registration_number }}">
+                                            <!-- Informações de detecção aparecerão aqui -->
+                                        </div>
+                                    </div>
+                                    <div class="stream-footer">
+                                        <small class="text-muted">
+                                            <i class="bi bi-clock"></i> 
+                                            <span id="last-frame-{{ item.registration_number }}">Aguardando...</span>
+                                        </small>
+                                        <small class="text-muted">
+                                            <span id="fps-{{ item.registration_number }}">0 FPS</span>
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <!-- Screen Section -->
+                                <div class="stream-section screen-section h-100">
+                                    <div class="stream-label">
+                                        <i class="bi bi-display"></i> Tela
+                                    </div>
+                                    <div class="card-body p-0 bg-dark position-relative" id="screen-container-{{ item.registration_number }}">
+                                        <canvas 
+                                            id="screen-canvas-{{ item.registration_number }}" 
+                                            class="screen-feed" 
+                                            width="960" 
+                                            height="540"
+                                        ></canvas>
+                                        <button class="btn btn-sm btn-light fullscreen-btn" onclick="toggleFullscreenCanvas('screen-canvas-{{ item.registration_number }}')" title="Tela cheia">
+                                            <i class="bi bi-fullscreen"></i>
+                                        </button>
+                                    </div>
+                                    <div class="stream-footer">
+                                        <small class="text-muted">
+                                            <i class="bi bi-clock"></i> 
+                                            <span id="last-screen-frame-{{ item.registration_number }}">Aguardando...</span>
+                                        </small>
+                                        <small class="text-muted">
+                                            <span id="screen-fps-{{ item.registration_number }}">0 FPS</span>
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <button class="btn btn-sm btn-light fullscreen-btn" onclick="toggleFullscreen('webcam-{{ item.registration_number }}')" title="Tela cheia">
-                            <i class="bi bi-fullscreen"></i>
-                        </button>
-                        <div class="detection-info" id="detection-{{ item.registration_number }}">
-                            <!-- Informações de detecção aparecerão aqui -->
+                    </div>
+                    
+                    <!-- Coluna da Direita: Atividade do Browser -->
+                    <div class="col-lg-4 col-md-12 bg-light">
+                        <div class="browser-section h-100 d-flex flex-column">
+                            <div class="stream-label">
+                                <i class="bi bi-globe"></i> Navegação em Tempo Real
+                            </div>
+                            <div class="p-3 flex-grow-1" id="browser-container-{{ item.registration_number }}">
+                                <div class="text-center text-muted py-5" id="browser-placeholder-{{ item.registration_number }}">
+                                    <i class="bi bi-browser-chrome display-4 mb-3"></i>
+                                    <p>Aguardando dados de navegação...</p>
+                                </div>
+                                
+                                <div id="browser-content-{{ item.registration_number }}" class="d-none">
+                                    <div class="mb-3">
+                                        <label class="text-muted small text-uppercase fw-bold">Navegador</label>
+                                        <div class="d-flex align-items-center mt-1">
+                                            <i class="bi bi-window me-2" id="browser-icon-{{ item.registration_number }}"></i>
+                                            <span class="fw-medium" id="browser-name-{{ item.registration_number }}">-</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="text-muted small text-uppercase fw-bold">Status</label>
+                                        <div class="mt-1">
+                                            <span class="badge bg-secondary" id="url-status-badge-{{ item.registration_number }}">
+                                                Desconhecido
+                                            </span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="text-muted small text-uppercase fw-bold">Título da Página</label>
+                                        <div class="p-2 bg-white border rounded mt-1 text-break" style="min-height: 40px;">
+                                            <span class="text-muted" id="page-title-{{ item.registration_number }}">
+                                                -
+                                            </span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="text-muted small text-uppercase fw-bold">URL Completa</label>
+                                        <div class="p-2 bg-white border rounded mt-1 text-break" style="min-height: 40px; font-family: 'Courier New', monospace; font-size: 0.85rem;">
+                                            <a href="#" target="_blank" class="text-decoration-none" id="current-url-{{ item.registration_number }}">
+                                                -
+                                            </a>
+                                        </div>
+                                    </div>
+
+                                    <div class="alert alert-warning d-none" id="browser-alert-{{ item.registration_number }}">
+                                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                        <span id="browser-alert-msg-{{ item.registration_number }}"></span>
+                                    </div>
+                                    
+                                    <div class="mt-auto text-end">
+                                        <small class="text-muted">
+                                            Atualizado: <span id="browser-time-{{ item.registration_number }}">-</span>
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                    <div class="stream-footer">
-                        <small class="text-muted">
-                            <i class="bi bi-clock"></i> 
-                            <span id="last-frame-{{ item.registration_number }}">Aguardando...</span>
-                        </small>
-                        <small class="text-muted">
-                            <span id="fps-{{ item.registration_number }}">0 FPS</span>
-                        </small>
-                    </div>
-                </div>
-                
-                <!-- Screen Section -->
-                <div class="stream-section screen-section">
-                    <div class="stream-label">
-                        <i class="bi bi-display"></i> Tela
-                    </div>
-                    <div class="card-body p-0 bg-dark position-relative" id="screen-container-{{ item.registration_number }}">
-                        <canvas 
-                            id="screen-canvas-{{ item.registration_number }}" 
-                            class="screen-feed" 
-                            width="960" 
-                            height="540"
-                        ></canvas>
-                        <button class="btn btn-sm btn-light fullscreen-btn" onclick="toggleFullscreenCanvas('screen-canvas-{{ item.registration_number }}')" title="Tela cheia">
-                            <i class="bi bi-fullscreen"></i>
-                        </button>
-                    </div>
-                    <div class="stream-footer">
-                        <small class="text-muted">
-                            <i class="bi bi-clock"></i> 
-                            <span id="last-screen-frame-{{ item.registration_number }}">Aguardando...</span>
-                        </small>
-                        <small class="text-muted">
-                            <span id="screen-fps-{{ item.registration_number }}">0 FPS</span>
-                        </small>
                     </div>
                 </div>
             </div>
@@ -253,6 +326,7 @@
     // WebSocket connections para cada aluno
     const webcamConnections = {};
     const screenConnections = {};
+    const browserConnections = {};
     const frameCounters = {};
     const screenFrameCounters = {};
     const lastFrameTimes = {};
@@ -269,11 +343,12 @@
     const webcamRenderLocks = {};
     const webcamLastRenderTime = {};
     
-    // Conectar aos WebSockets de webcam e tela para cada aluno
+    // Conectar aos WebSockets de webcam, tela e browser para cada aluno
     function connectWebcams() {
         {% for item in students_status %}
         connectWebcam('{{ item.registration_number }}', '{{ item.name }}');
         connectScreen('{{ item.registration_number }}', '{{ item.name }}');
+        connectBrowser('{{ item.registration_number }}', '{{ item.name }}');
         {% endfor %}
     }
     
@@ -524,6 +599,103 @@
         }
     }
     
+    function connectBrowser(registrationNumber, studentName) {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws/browser-view/${registrationNumber}/`;
+        
+        console.log(`Conectando ao WebSocket de browser: ${wsUrl}`);
+        
+        try {
+            const ws = new WebSocket(wsUrl);
+            
+            ws.onopen = function(e) {
+                console.log(`WebSocket de browser conectado para ${studentName}`);
+            };
+            
+            ws.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'browser_data') {
+                        updateBrowserInfo(registrationNumber, data.data);
+                    }
+                } catch (error) {
+                    console.error(`Erro ao processar msg de browser: ${error}`);
+                }
+            };
+            
+            ws.onclose = function() {
+                setTimeout(() => connectBrowser(registrationNumber, studentName), 5000);
+            };
+            
+            browserConnections[registrationNumber] = ws;
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    function updateBrowserInfo(registrationNumber, data) {
+        // Esconder placeholder, mostrar conteúdo
+        document.getElementById(`browser-placeholder-${registrationNumber}`).classList.add('d-none');
+        document.getElementById(`browser-content-${registrationNumber}`).classList.remove('d-none');
+        
+        // Atualizar campos
+        document.getElementById(`browser-name-${registrationNumber}`).textContent = data.browser || 'Desconhecido';
+        
+        // Atualizar título da página
+        const pageTitle = data.title || data.original_title || 'Sem título';
+        document.getElementById(`page-title-${registrationNumber}`).textContent = pageTitle;
+        
+        // Atualizar URL completa
+        document.getElementById(`current-url-${registrationNumber}`).textContent = data.url || 'Sem URL';
+        document.getElementById(`current-url-${registrationNumber}`).href = data.url || '#';
+        
+        document.getElementById(`browser-time-${registrationNumber}`).textContent = new Date(data.timestamp).toLocaleTimeString();
+        
+        // Ícone do browser
+        const iconElem = document.getElementById(`browser-icon-${registrationNumber}`);
+        if (data.browser && data.browser.toLowerCase().includes('chrome')) iconElem.className = 'bi bi-browser-chrome me-2 text-primary';
+        else if (data.browser && data.browser.toLowerCase().includes('firefox')) iconElem.className = 'bi bi-browser-firefox me-2 text-warning';
+        else if (data.browser && data.browser.toLowerCase().includes('edge')) iconElem.className = 'bi bi-browser-edge me-2 text-primary';
+        else iconElem.className = 'bi bi-window me-2';
+
+        // Status e Cores
+        const badge = document.getElementById(`url-status-badge-${registrationNumber}`);
+        const alertBox = document.getElementById(`browser-alert-${registrationNumber}`);
+        const alertMsg = document.getElementById(`browser-alert-msg-${registrationNumber}`);
+        const container = document.getElementById(`browser-container-${registrationNumber}`);
+        
+        // Resetar classes
+        badge.className = 'badge';
+        alertBox.classList.add('d-none');
+        container.className = 'p-3 flex-grow-1';
+        
+        if (data.status === 'allowed') {
+            badge.classList.add('bg-success');
+            badge.innerHTML = '<i class="bi bi-check-circle-fill"></i> Permitido';
+            container.classList.add('bg-light-success'); // Opcional: fundo esverdeado suave
+        } else if (data.status === 'blocked') {
+            badge.classList.add('bg-danger');
+            badge.innerHTML = '<i class="bi bi-x-circle-fill"></i> BLOQUEADO';
+            
+            // Mostrar alerta
+            alertBox.classList.remove('d-none');
+            alertMsg.textContent = `Acesso a site proibido detectado: ${data.match || 'URL Bloqueada'}`;
+            container.classList.add('bg-light-danger');
+            
+            // Efeito visual de alerta
+            badge.classList.add('blink');
+        } else if (data.status === 'warning') {
+            badge.classList.add('bg-warning', 'text-dark');
+            badge.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i> Suspeito';
+            
+            alertBox.classList.remove('d-none');
+            alertMsg.textContent = data.match || 'Site possivelmente usado para trapaça do exame';
+        } else {
+            badge.classList.add('bg-secondary');
+            badge.textContent = 'Desconhecido';
+        }
+    }
+
     function processScreenFrame(registrationNumber, data) {
         const frameData = data.data;
         
@@ -935,19 +1107,7 @@
     
     @media (min-width: 1400px) {
         #webcam-grid {
-            grid-template-columns: repeat(2, 1fr);
-        }
-    }
-    
-    @media (min-width: 1920px) {
-        #webcam-grid {
-            grid-template-columns: repeat(3, 1fr);
-        }
-    }
-    
-    @media (max-width: 1399px) {
-        #webcam-grid {
-            grid-template-columns: 1fr;
+            grid-template-columns: repeat(1, 1fr); /* Cards largos */
         }
     }
     
@@ -1073,6 +1233,14 @@
         width: 100vw;
         height: 100vh;
     }
+    
+    /* Cores de fundo suaves para browser activity */
+    .bg-light-success {
+        background-color: #f0fff4 !important;
+    }
+    
+    .bg-light-danger {
+        background-color: #fff5f5 !important;
+    }
 </style>
 {% endblock %}
-

@@ -40,6 +40,12 @@ class APIClient:
         self.ws_screen_connected = False
         self.ws_screen_thread = None
         self.ws_screen_running = False
+        
+        # WebSocket para browser data
+        self.ws_browser = None
+        self.ws_browser_connected = False
+        self.ws_browser_thread = None
+        self.ws_browser_running = False
     
     def test_connection(self) -> bool:
         """
@@ -408,3 +414,97 @@ class APIClient:
         logger.info(f"WebSocket de tela fechado: {close_status_code} - {close_msg}")
         self.ws_screen_connected = False
 
+    # ===== BROWSER DATA WEBSOCKET =====
+    
+    def connect_browser_stream(self) -> bool:
+        """Conecta ao WebSocket para dados de navegador."""
+        try:
+            if self.ws_browser_connected:
+                return True
+            
+            # Construir URL do WebSocket
+            ws_url = SERVER_URL.replace('http://', 'ws://').replace('https://', 'wss://')
+            ws_url = f"{ws_url}/ws/browser/{self.registration_number}/"
+            
+            logger.info(f"Conectando WebSocket de browser: {ws_url}")
+            
+            self.ws_browser = websocket.WebSocketApp(
+                ws_url,
+                on_open=self._on_ws_browser_open,
+                on_message=self._on_ws_browser_message,
+                on_error=self._on_ws_browser_error,
+                on_close=self._on_ws_browser_close
+            )
+            
+            self.ws_browser_running = True
+            self.ws_browser_thread = threading.Thread(target=self._ws_browser_run, daemon=True)
+            self.ws_browser_thread.start()
+            
+            # Timeout
+            timeout = 5
+            start_time = time.time()
+            while not self.ws_browser_connected and time.time() - start_time < timeout:
+                time.sleep(0.1)
+            
+            if self.ws_browser_connected:
+                logger.info("WebSocket de browser conectado com sucesso")
+                return True
+            else:
+                logger.error("Timeout ao conectar WebSocket de browser")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Erro ao conectar WebSocket de browser: {e}", exc_info=True)
+            return False
+
+    def disconnect_browser_stream(self):
+        """Desconecta o WebSocket de browser."""
+        self.ws_browser_running = False
+        if self.ws_browser:
+            self.ws_browser.close()
+        if self.ws_browser_thread:
+            self.ws_browser_thread.join(timeout=3)
+        self.ws_browser_connected = False
+
+    def send_browser_data(self, data: Dict) -> bool:
+        """Envia dados de navegação via WebSocket."""
+        try:
+            if not self.ws_browser_connected or not self.ws_browser:
+                return False
+            
+            message = {
+                'type': 'browser_data',
+                'registration_number': self.registration_number,
+                'data': data
+            }
+            
+            self.ws_browser.send(json.dumps(message))
+            return True
+        except Exception as e:
+            if hasattr(self, '_last_browser_error_log_time'):
+                if time.time() - self._last_browser_error_log_time > 5:
+                    logger.error(f"Erro ao enviar dados de browser: {e}")
+                    self._last_browser_error_log_time = time.time()
+            else:
+                self._last_browser_error_log_time = time.time()
+            return False
+
+    def _ws_browser_run(self):
+        try:
+            self.ws_browser.run_forever()
+        except Exception:
+            pass
+
+    def _on_ws_browser_open(self, ws):
+        logger.info("WebSocket de browser aberto")
+        self.ws_browser_connected = True
+
+    def _on_ws_browser_message(self, ws, message):
+        pass
+
+    def _on_ws_browser_error(self, ws, error):
+        logger.error(f"Erro no WebSocket de browser: {error}")
+        self.ws_browser_connected = False
+
+    def _on_ws_browser_close(self, ws, close_status_code, close_msg):
+        self.ws_browser_connected = False

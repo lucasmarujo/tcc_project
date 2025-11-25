@@ -209,7 +209,6 @@ class WebcamConsumer(AsyncWebsocketConsumer):
             
         except Exception as e:
             logger.error(f"Erro ao criar alerta de face não detectada: {e}", exc_info=True)
-    
 
 
 class WebcamViewerConsumer(AsyncWebsocketConsumer):
@@ -390,3 +389,115 @@ class ScreenViewerConsumer(AsyncWebsocketConsumer):
         except Exception as e:
             logger.error(f"Erro ao enviar frame de tela para viewer: {e}")
 
+
+class BrowserConsumer(AsyncWebsocketConsumer):
+    """Consumer para receber dados de navegação dos alunos em tempo real."""
+    
+    async def connect(self):
+        """Conecta ao WebSocket de browser do aluno."""
+        # Obter matrícula do aluno da URL
+        self.registration_number = self.scope['url_route']['kwargs'].get('registration_number')
+        
+        if not self.registration_number:
+            logger.error("Matrícula não fornecida na URL")
+            await self.close()
+            return
+        
+        # Nome do grupo para este aluno específico
+        self.room_group_name = f'browser_{self.registration_number}'
+        
+        # Join room group
+        await self.channel_layer.group_add(
+            self.room_group_name,
+            self.channel_name
+        )
+        
+        await self.accept()
+        logger.info(f"WebSocket de browser conectado para aluno {self.registration_number}")
+    
+    async def disconnect(self, close_code):
+        """Desconecta do WebSocket."""
+        if hasattr(self, 'room_group_name'):
+            # Leave room group
+            await self.channel_layer.group_discard(
+                self.room_group_name,
+                self.channel_name
+            )
+        
+        logger.info(f"WebSocket de browser desconectado para aluno {self.registration_number}")
+    
+    async def receive(self, text_data):
+        """
+        Recebe dados de navegação.
+        
+        Formato esperado:
+        {
+            'type': 'browser_data',
+            'registration_number': '...',
+            'data': {
+                'url': '...',
+                'title': '...',
+                'browser': '...',
+                'status': 'allowed' | 'blocked' | 'warning',
+                'timestamp': ...
+            }
+        }
+        """
+        try:
+            message = json.loads(text_data)
+            message_type = message.get('type')
+            
+            if message_type == 'browser_data':
+                # Broadcast para todos os viewers conectados
+                await self.channel_layer.group_send(
+                    f'browser_view_{self.registration_number}',
+                    {
+                        'type': 'browser_data_broadcast',
+                        'message': message
+                    }
+                )
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Erro ao decodificar JSON de browser: {e}")
+        except Exception as e:
+            logger.error(f"Erro ao processar mensagem de browser: {e}", exc_info=True)
+
+
+class BrowserViewerConsumer(AsyncWebsocketConsumer):
+    """Consumer para viewers (admin) verem dados de navegação."""
+    
+    async def connect(self):
+        """Conecta ao WebSocket para visualizar browser de um aluno."""
+        self.registration_number = self.scope['url_route']['kwargs'].get('registration_number')
+        
+        if not self.registration_number:
+            await self.close()
+            return
+            
+        user = self.scope.get('user')
+        if not user or not user.is_authenticated:
+            await self.close()
+            return
+        
+        self.room_group_name = f'browser_view_{self.registration_number}'
+        
+        await self.channel_layer.group_add(
+            self.room_group_name,
+            self.channel_name
+        )
+        
+        await self.accept()
+    
+    async def disconnect(self, close_code):
+        if hasattr(self, 'room_group_name'):
+            await self.channel_layer.group_discard(
+                self.room_group_name,
+                self.channel_name
+            )
+    
+    async def browser_data_broadcast(self, event):
+        try:
+            message = event['message']
+            await self.send(text_data=json.dumps(message))
+        except Exception as e:
+            logger.error(f"Erro ao enviar dados de browser para viewer: {e}")

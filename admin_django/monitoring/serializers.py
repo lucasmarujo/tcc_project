@@ -105,7 +105,7 @@ class MonitoringEventCreateSerializer(serializers.Serializer):
             suspicious_apps = [
                 'whatsapp', 'telegram', 'discord', 'slack', 'teams',
                 'notepad++', 'vscode', 'pycharm', 'visualstudio',
-                'cmd', 'powershell', 'terminal'
+                'cmd', 
             ]
             
             app_lower = event.app_name.lower()
