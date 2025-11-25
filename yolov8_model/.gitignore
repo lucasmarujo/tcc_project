@@ -24,6 +24,9 @@ runs/
 # YOLOv8 Cache
 *.cache
 
+data/
+scripts/models/
+
 # Dataset (opcional - descomente se não quiser commitar imagens)
 # data/permitido/*.jpg
 # data/permitido/*.png
