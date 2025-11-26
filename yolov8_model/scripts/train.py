@@ -77,21 +77,20 @@ print("=" * 80)
 # ===========================
 print("\n📝 Criando arquivo de configuração...")
 
+# Para YOLOv8 Classification, apenas precisamos do path
+# As classes são detectadas automaticamente pelas subpastas
 config_data = {
     'path': str(DATA_DIR.absolute()),
-    'train': str(base_dir.absolute()),
-    'val': str(base_dir.absolute()),
-    'test': str(base_dir.absolute()),
-    'names': {
-        0: 'nao_permitido',
-        1: 'permitido'
-    }
+    'train': 'train',  # Caminho relativo
+    'val': 'val',      # Caminho relativo
+    'test': 'train'    # Usar train como test se não houver pasta test
 }
 
 with open(CONFIG_PATH, 'w') as f:
     yaml.dump(config_data, f, default_flow_style=False)
 
 print(f"✅ Configuração salva em: {CONFIG_PATH}")
+print(f"   Classes serão detectadas automaticamente das subpastas")
 
 # ===========================
 # INICIALIZAR MODELO

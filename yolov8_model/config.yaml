@@ -1,7 +1,4 @@
-names:
-  0: nao_permitido
-  1: permitido
 path: C:\Users\Pichau\Documents\tcc_project\yolov8_model\data
-test: C:\Users\Pichau\Documents\tcc_project\yolov8_model\data\train
-train: C:\Users\Pichau\Documents\tcc_project\yolov8_model\data\train
-val: C:\Users\Pichau\Documents\tcc_project\yolov8_model\data\train
+test: train
+train: train
+val: val

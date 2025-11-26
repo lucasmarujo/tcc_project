@@ -1,0 +1,12 @@
+# Dependências para detecção de Brightspace via DOM
+# Instalar com: pip install -r requirements_brightspace.txt
+
+# Chrome DevTools Protocol
+pychrome>=0.2.4
+
+# WebSocket para conexão direta
+websocket-client>=1.6.0
+
+# Requests para obter lista de tabs
+requests>=2.31.0
+

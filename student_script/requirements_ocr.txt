@@ -1,0 +1,26 @@
+# Dependências para OCR + Análise de Tela
+# Instalar com: pip install -r requirements_ocr.txt
+
+# OCR - Escolha UMA das opções:
+
+# Opção 1: EasyOCR (Recomendado - mais preciso, mas mais pesado ~500MB)
+easyocr>=1.7.0
+
+# Opção 2: Pytesseract (mais leve, menos preciso)
+# Descomente se preferir usar Pytesseract em vez de EasyOCR
+# pytesseract>=0.3.10
+# NOTA: Pytesseract requer instalação do Tesseract-OCR:
+# Windows: https://github.com/UB-Mannheim/tesseract/wiki
+# Linux: sudo apt-get install tesseract-ocr tesseract-ocr-por
+# Mac: brew install tesseract tesseract-lang
+
+# LLM (Opcional - apenas se usar análise avançada)
+# Descomente apenas se realmente precisar
+# langchain>=0.1.0
+# langchain-openai>=0.0.2
+# httpx>=0.24.0
+
+# Outras dependências
+Pillow>=10.0.0
+numpy>=1.24.0
+

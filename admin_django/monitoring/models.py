@@ -16,6 +16,7 @@ class MonitoringEvent(models.Model):
         ('copy_paste', 'Copiar/Colar'),
         ('screenshot', 'Screenshot Tentado'),
         ('keyboard_event', 'Evento de Teclado'),
+        ('brightspace_event', 'Evento do Brightspace/AVA'),
         ('system', 'Evento do Sistema'),
     ]
     

@@ -146,6 +146,54 @@ class MonitoringEventCreateSerializer(serializers.Serializer):
                 alert_reason = f"Uso de {action} pode indicar consulta a fontes externas"
                 severity = "medium"
         
+        # 🆕 Verificar eventos de Brightspace (slides, acessos durante provas, etc)
+        elif event.event_type == 'brightspace_event':
+            # Verificar flags no additional_data
+            additional_data = event.additional_data or {}
+            is_alert_flagged = additional_data.get('is_alert', False)
+            is_violation = additional_data.get('is_violation', False)
+            page_type = additional_data.get('page_type', '')
+            alert_type = additional_data.get('alert_type', '')
+            
+            # Se está marcado como alerta (slides ou acesso indevido)
+            if is_alert_flagged or is_violation:
+                should_alert = True
+                
+                # Determinar severidade
+                event_severity = additional_data.get('severity', 'medium')
+                if event_severity == 'high':
+                    severity = 'high'
+                elif event_severity == 'critical':
+                    severity = 'critical'
+                else:
+                    severity = 'medium'
+                
+                # Título e descrição baseados no tipo
+                if page_type == 'slides':
+                    alert_title = "⚠️ Acesso a Slides/Conteúdo do Brightspace"
+                    url_accessed = additional_data.get('url', 'URL não informada')
+                    is_in_quiz = additional_data.get('is_in_quiz', False)
+                    
+                    if is_in_quiz:
+                        alert_description = f"🔴 ALERTA CRÍTICO: Aluno acessou material/slides DURANTE UMA PROVA!"
+                        alert_reason = f"Acesso a conteúdo do AVA durante prova é considerado violação. URL: {url_accessed}"
+                        severity = 'critical'
+                    else:
+                        alert_description = f"Aluno acessou slides/conteúdo do Brightspace/AVA"
+                        alert_reason = additional_data.get('alert_reason', f"Acesso a material de estudo detectado. URL: {url_accessed}")
+                
+                elif alert_type == 'unauthorized_access_during_quiz':
+                    alert_title = "🔴 ACESSO INDEVIDO DURANTE PROVA"
+                    alert_description = additional_data.get('message', 'Acesso não autorizado detectado durante prova')
+                    alert_reason = f"Tipo de acesso: {additional_data.get('access_type', 'desconhecido')}. URL: {additional_data.get('url', 'N/A')}"
+                    severity = 'critical'
+                
+                else:
+                    # Outro tipo de evento do Brightspace marcado como alerta
+                    alert_title = f"Alerta Brightspace: {alert_type}"
+                    alert_description = additional_data.get('message', 'Evento suspeito no Brightspace')
+                    alert_reason = additional_data.get('alert_reason', 'Evento marcado como alerta pelo sistema')
+        
         # Criar alerta se necessário
         if should_alert:
             Alert.objects.create(
