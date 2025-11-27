@@ -10,7 +10,7 @@ import time
 from typing import Dict, Optional
 import websocket
 
-from config import REPORT_ENDPOINT, HEARTBEAT_ENDPOINT, SERVER_URL
+from config import REPORT_ENDPOINT, ALERT_ENDPOINT, HEARTBEAT_ENDPOINT, SERVER_URL
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +134,50 @@ class APIClient:
                 
         except requests.exceptions.RequestException as e:
             logger.error(f"Erro ao reportar evento: {e}")
+            return False
+    
+    def send_alert(self, alert_data: Dict) -> bool:
+        """
+        Envia um alerta para o servidor.
+        
+        Args:
+            alert_data: Dicionário com dados do alerta
+                - event_type: tipo do evento ('url_access', 'brightspace_event', etc)
+                - severity: severidade ('low', 'medium', 'high', 'critical')
+                - title: título do alerta
+                - description: descrição detalhada
+                - reason: motivo do alerta
+                - url: URL relacionada (opcional)
+                - browser: navegador (opcional)
+                - additional_data: dados extras (opcional)
+            
+        Returns:
+            True se enviado com sucesso, False caso contrário
+        """
+        try:
+            # Adicionar matrícula e nome da máquina aos dados
+            alert_data['registration_number'] = self.registration_number
+            alert_data['machine_name'] = self.machine_name
+            
+            response = self.session.post(
+                ALERT_ENDPOINT,
+                json=alert_data,
+                timeout=10
+            )
+            
+            if response.status_code == 201:
+                result = response.json()
+                logger.info(f"✅ Alerta enviado com sucesso: {alert_data.get('title')}")
+                logger.debug(f"Alert ID: {result.get('alert_id')}")
+                return True
+            else:
+                logger.warning(
+                    f"Falha ao enviar alerta: {response.status_code} - {response.text}"
+                )
+                return False
+                
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Erro ao enviar alerta: {e}")
             return False
     
     def get_monitoring_status(self) -> Optional[Dict]:

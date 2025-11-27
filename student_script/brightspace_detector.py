@@ -79,10 +79,14 @@ class BrightspaceDetector:
             return
         
         logger.info("Iniciando BrightspaceDetector...")
+        logger.info("✅ Detector de páginas do Brightspace (AVA) em tempo real")
+        logger.info("   - Detecta provas, slides e conteúdos")
+        logger.info("   - Envia alertas automáticos")
+        
         self.running = True
-        self.thread = threading.Thread(target=self._detection_loop, daemon=True)
+        self.thread = threading.Thread(target=self._detection_loop, daemon=True, name="BrightspaceDetector")
         self.thread.start()
-        logger.info("BrightspaceDetector iniciado")
+        logger.info("✅ BrightspaceDetector iniciado")
     
     def stop(self):
         """Para o monitoramento."""
@@ -97,27 +101,50 @@ class BrightspaceDetector:
     def _detection_loop(self):
         """Loop principal de detecção."""
         connection_checked = False
+        chrome_not_connected_warned = False
         
         while self.running:
             try:
                 # Verificar conexão na primeira execução
                 if not connection_checked:
                     if self._test_chrome_connection():
-                        logger.info("[OK] Chrome DevTools conectado - Detector funcionando!")
+                        logger.info("=" * 80)
+                        logger.info("✅ BRIGHTSPACE DETECTOR TOTALMENTE ATIVO!")
+                        logger.info("=" * 80)
+                        logger.info("✅ Chrome DevTools conectado")
+                        logger.info("✅ Análise avançada de DOM habilitada")
+                        logger.info("✅ Detecção de provas e slides em tempo real")
+                        logger.info("=" * 80)
+                        chrome_not_connected_warned = False
                     else:
-                        logger.warning("[AVISO] Chrome DevTools NAO conectado!")
-                        logger.warning("   Execute: start_chrome_debug.bat")
-                        logger.warning("   Ou inicie Chrome com: chrome.exe --remote-debugging-port=9222")
+                        logger.warning("=" * 80)
+                        logger.warning("⚠️ AVISO: Chrome DevTools não conectado")
+                        logger.warning("=" * 80)
+                        logger.warning("O Chrome pode não ter iniciado corretamente em modo debug.")
+                        logger.warning("Tentando reconectar automaticamente...")
+                        logger.warning("")
+                        logger.warning("NOTA: O sistema continua funcionando normalmente.")
+                        logger.warning("      Browser Monitor está ativo e funcional.")
+                        logger.warning("=" * 80)
+                        chrome_not_connected_warned = True
                     connection_checked = True
                 
-                # Verificar páginas abertas nos navegadores
-                self._check_browser_pages()
+                # Verificar páginas abertas nos navegadores (somente se conectado)
+                if self._test_chrome_connection():
+                    self._check_browser_pages()
+                    if chrome_not_connected_warned:
+                        logger.info("✅ Chrome DevTools reconectado! Brightspace Detector ativo.")
+                        chrome_not_connected_warned = False
+                elif not chrome_not_connected_warned:
+                    # Não logar erro a cada ciclo, apenas avisar uma vez
+                    logger.debug("Chrome DevTools não conectado (detector aguardando)")
                 
                 # Aguardar antes da próxima verificação
                 time.sleep(self.check_interval)
                 
             except Exception as e:
-                logger.error(f"Erro no loop de detecção: {e}", exc_info=True)
+                if not chrome_not_connected_warned:
+                    logger.error(f"Erro no loop de detecção: {e}", exc_info=True)
                 time.sleep(self.check_interval)
     
     def _test_chrome_connection(self) -> bool:
@@ -205,11 +232,11 @@ class BrightspaceDetector:
             if brightspace_tabs_found > 0:
                 logger.warning(f"[BRIGHTSPACE] === {brightspace_tabs_found} TABS DO AVA ENCONTRADAS ===")
             else:
-                logger.info(f"[DEBUG] Nenhuma tab do Brightspace encontrada ({total_tabs} tabs no total)")
+                logger.debug(f"[DEBUG] Nenhuma tab do Brightspace encontrada ({total_tabs} tabs no total)")
             
         except Exception as e:
-            logger.error(f"[ERRO] Nao foi possivel conectar ao Chrome DevTools: {e}")
-            logger.error(f"[ERRO] Certifique-se de que o Chrome foi iniciado com --remote-debugging-port=9222")
+            # Não logar erro verbose a cada verificação - já avisamos no início
+            logger.debug(f"[DEBUG] Chrome DevTools não conectado: {e}")
     
     
     def _is_brightspace_url(self, url: str) -> bool:

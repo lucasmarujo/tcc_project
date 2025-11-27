@@ -10,6 +10,7 @@ SERVER_URL = os.getenv('MONITOR_SERVER_URL', 'http://localhost:8000')
 
 # Endpoints
 REPORT_ENDPOINT = f"{SERVER_URL}/api/report/"
+ALERT_ENDPOINT = f"{SERVER_URL}/api/alert/"
 HEARTBEAT_ENDPOINT = f"{SERVER_URL}/api/heartbeat/"
 
 # Arquivo de configuração local do aluno

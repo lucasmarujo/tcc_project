@@ -135,6 +135,69 @@ def report_event(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+def create_alert(request):
+    """
+    Endpoint para o script do aluno criar alertas (URL bloqueada, acesso indevido, etc).
+    """
+    registration_number = request.data.get('registration_number')
+    
+    if not registration_number:
+        return Response(
+            {'error': 'registration_number is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        student = Student.objects.get(registration_number=registration_number)
+    except Student.DoesNotExist:
+        return Response(
+            {'error': 'Student not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    # Criar evento primeiro
+    event_data = {
+        'student': student.id,
+        'event_type': request.data.get('event_type', 'system'),
+        'url': request.data.get('url', ''),
+        'browser': request.data.get('browser', ''),
+        'app_name': request.data.get('app_name', ''),
+        'window_title': request.data.get('window_title', ''),
+        'machine_name': request.data.get('machine_name', ''),
+        'additional_data': request.data.get('additional_data', {})
+    }
+    
+    # Obter IP
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        event_data['ip_address'] = x_forwarded_for.split(',')[0]
+    else:
+        event_data['ip_address'] = request.META.get('REMOTE_ADDR')
+    
+    event = MonitoringEvent.objects.create(**event_data)
+    
+    # Criar alerta
+    alert_data = {
+        'event': event,
+        'student': student,
+        'severity': request.data.get('severity', 'medium'),
+        'title': request.data.get('title', 'Alerta de Segurança'),
+        'description': request.data.get('description', ''),
+        'reason': request.data.get('reason', '')
+    }
+    
+    alert = Alert.objects.create(**alert_data)
+    
+    return Response({
+        'status': 'success',
+        'alert_id': str(alert.id),
+        'event_id': str(event.id),
+        'message': 'Alerta criado com sucesso'
+    }, status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
 def heartbeat(request):
     """
     Endpoint para o script enviar heartbeat (confirmar que está ativo).
