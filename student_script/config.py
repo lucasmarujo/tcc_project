@@ -1,9 +1,23 @@
 """
 Configurações do script de monitoramento.
 """
+import sys
 import os
 import json
 from pathlib import Path
+
+def get_bundle_dir():
+    """Retorna o diretório base para arquivos de dados (PyInstaller ou execução normal)."""
+    if getattr(sys, 'frozen', False):
+        return Path(sys._MEIPASS)
+    return Path(__file__).parent
+
+def get_config_dir():
+    """Retorna o diretório para salvar configurações persistentes."""
+    if getattr(sys, 'frozen', False):
+        # Quando compilado, salvar na pasta do executável
+        return Path(sys.executable).parent
+    return Path(__file__).parent
 
 # Configurações do servidor
 SERVER_URL = os.getenv('MONITOR_SERVER_URL', 'http://localhost:8000')
@@ -13,8 +27,8 @@ REPORT_ENDPOINT = f"{SERVER_URL}/api/report/"
 ALERT_ENDPOINT = f"{SERVER_URL}/api/alert/"
 HEARTBEAT_ENDPOINT = f"{SERVER_URL}/api/heartbeat/"
 
-# Arquivo de configuração local do aluno
-CONFIG_FILE = Path(__file__).parent / 'student_config.json'
+# Arquivo de configuração local do aluno (deve ser persistente)
+CONFIG_FILE = get_config_dir() / 'student_config.json'
 
 def get_student_info():
     """Obtém as informações do aluno do arquivo de configuração."""

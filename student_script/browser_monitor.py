@@ -2,6 +2,8 @@
 Módulo para monitoramento de navegadores.
 Detecta URLs abertas no Chrome, Edge e Firefox.
 """
+import sys
+import os
 import logging
 import platform
 import re
@@ -10,6 +12,12 @@ from typing import List, Tuple, Dict, Optional
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+def get_bundle_dir():
+    """Retorna o diretório base (para PyInstaller ou execução normal)."""
+    if getattr(sys, 'frozen', False):
+        return Path(sys._MEIPASS)
+    return Path(__file__).parent
 
 # Tentar importar bibliotecas específicas do Windows
 try:
@@ -36,7 +44,7 @@ class BrowserMonitor:
         
         # Carregar URLs bloqueadas
         if blocked_urls_file is None:
-            blocked_urls_file = Path(__file__).parent / 'url_bloqueadas.txt'
+            blocked_urls_file = get_bundle_dir() / 'url_bloqueadas.txt'
         else:
             blocked_urls_file = Path(blocked_urls_file)
         
@@ -44,7 +52,7 @@ class BrowserMonitor:
         
         # Carregar URLs permitidas
         if allowed_urls_file is None:
-            allowed_urls_file = Path(__file__).parent / 'urls_permitidas.txt'
+            allowed_urls_file = get_bundle_dir() / 'urls_permitidas.txt'
         else:
             allowed_urls_file = Path(allowed_urls_file)
             

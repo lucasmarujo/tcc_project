@@ -2,6 +2,19 @@
 Script principal de monitoramento de alunos.
 Monitora navegadores, processos do sistema e teclas especiais.
 """
+import sys
+import os
+
+# Configurar path para PyInstaller encontrar módulos locais
+if getattr(sys, 'frozen', False):
+    # Executando como executável compilado
+    bundle_dir = sys._MEIPASS
+    sys.path.insert(0, bundle_dir)
+else:
+    # Executando como script Python
+    bundle_dir = os.path.dirname(os.path.abspath(__file__))
+    sys.path.insert(0, bundle_dir)
+
 import time
 import logging
 import socket
@@ -152,7 +165,10 @@ class StudentMonitor:
         self.reported_key_events = set()  # Para evitar reportar teclas múltiplas vezes rapidamente
         
         # Webcam monitor
-        model_path = Path(__file__).parent / 'face_detection_model' / 'yolov8m_200e.pt'
+        if getattr(sys, 'frozen', False):
+            model_path = Path(sys._MEIPASS) / 'face_detection_model' / 'yolov8m_200e.pt'
+        else:
+            model_path = Path(__file__).parent / 'face_detection_model' / 'yolov8m_200e.pt'
         self.webcam_monitor = WebcamMonitor(str(model_path), frame_callback=self._handle_webcam_frame)
         
         # Screen monitor

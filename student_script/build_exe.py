@@ -36,29 +36,61 @@ def build_executable():
         '--onefile',  # Criar um único executável
         '--console',  # COM janela de console para ver logs
         '--name=MonitorAluno',  # Nome do executável
-        # Adicionar arquivos de dados
+        # Adicionar arquivos de dados e módulos locais
         '--add-data=config.py;.',
         '--add-data=url_bloqueadas.txt;.',
+        '--add-data=urls_permitidas.txt;.',
         '--add-data=face_detection_model;face_detection_model',
-        # Hidden imports necessários
+        # MÓDULOS LOCAIS DO PROJETO - CRÍTICO!
+        '--add-data=browser_monitor.py;.',
+        '--add-data=api_client.py;.',
+        '--add-data=keyboard_monitor.py;.',
+        '--add-data=display_monitor.py;.',
+        '--add-data=webcam_monitor.py;.',
+        '--add-data=screen_monitor.py;.',
+        '--add-data=brightspace_detector.py;.',
+        '--add-data=screen_analyzer.py;.',
+        # Hidden imports dos módulos locais
+        '--hidden-import=browser_monitor',
+        '--hidden-import=api_client',
+        '--hidden-import=keyboard_monitor',
+        '--hidden-import=display_monitor',
+        '--hidden-import=webcam_monitor',
+        '--hidden-import=screen_monitor',
+        '--hidden-import=brightspace_detector',
+        '--hidden-import=screen_analyzer',
+        '--hidden-import=config',
+        # Hidden imports de bibliotecas externas
         '--hidden-import=win32gui',
         '--hidden-import=win32process',
         '--hidden-import=win32api',
         '--hidden-import=win32con',
         '--hidden-import=cv2',
         '--hidden-import=PIL',
+        '--hidden-import=PIL.Image',
         '--hidden-import=numpy',
         '--hidden-import=ultralytics',
         '--hidden-import=torch',
         '--hidden-import=websocket',
+        '--hidden-import=websocket._core',
+        '--hidden-import=websocket._app',
         '--hidden-import=requests',
         '--hidden-import=psutil',
         '--hidden-import=pynput',
+        '--hidden-import=pynput.keyboard',
+        '--hidden-import=pynput.keyboard._win32',
         '--hidden-import=mss',
+        '--hidden-import=screeninfo',
+        '--hidden-import=screeninfo.enumerators',
+        '--hidden-import=screeninfo.enumerators.windows',
+        '--hidden-import=omegaconf',
+        '--hidden-import=antlr4',
+        '--hidden-import=yaml',
         # Coletar submodules
         '--collect-all=ultralytics',
         '--collect-all=torch',
         '--collect-all=cv2',
+        '--collect-all=omegaconf',
         # Arquivo principal
         'monitor.py'
     ]
